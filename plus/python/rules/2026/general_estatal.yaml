@@ -1,0 +1,9 @@
+# Государственная половина шкалы общей базы IRPF (art. 63 LIRPF).
+# Без изменений с 2021 г. TODO: verify для 2026 по BOE/AEAT.
+scale:
+  - {upto: 12450,  rate: 0.095}
+  - {upto: 20200,  rate: 0.12}
+  - {upto: 35200,  rate: 0.15}
+  - {upto: 60000,  rate: 0.185}
+  - {upto: 300000, rate: 0.225}
+  - {upto: null,   rate: 0.245}

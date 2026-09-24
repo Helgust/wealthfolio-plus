@@ -1,0 +1,46 @@
+# Reducciones и compensación de rentas IRPF. Источник — LIRPF (Ley 35/2006), консолидированный
+# текст BOE-A-2006-20764 на 09.09.2026; статьи ниже не менялись с 2023 г. (Ley 31/2022),
+# поэтому одинаковы для 2025 и 2026. Порядок применения сверен с AEAT, Manual práctico Renta 2025.
+
+# Reducción по rendimientos netos de actividades económicas (art. 32.2 и 32.3 LIRPF).
+actividad:
+  # 32.2.1º — только при всех требованиях 32.2.2º: один клиент (или TRADE), gastos ≤ 30 %
+  # ingresos, нет rendimientos del trabajo, ≥ 70 % ingresos с retención, estimación directa;
+  # в EDS несовместимо с gastos de difícil justificación.
+  dependiente:
+    general: 2000
+    adicional:                  # 32.2.1º.a — если rendimiento < rend_max и прочие rentas ≤ otras_rentas_max
+      rend_max: 19747.5
+      otras_rentas_max: 6500
+      plano_hasta: 14047.5      # до этого rendimiento — полная сумма
+      importe: 6498
+      pendiente: 1.14           # дальше: importe − pendiente × (rend − plano_hasta)
+    discapacidad_33: 3500       # 32.2.1º.b
+    discapacidad_65: 7750       # 32.2.1º.b — ≥ 65 % или помощь третьих лиц / movilidad reducida
+  # 32.2.3º — остальные autónomos с rentas no exentas (включая саму деятельность) < rentas_max.
+  rentas_bajas:
+    rentas_max: 12000
+    plano_hasta: 8000
+    importe: 1620
+    pendiente: 0.405
+  # 32.3 — начало деятельности: 20 % положительного rendimiento (после 32.1–32.2) в первый
+  # год с положительным rendimiento и следующий; база не больше base_max.
+  inicio_actividad:
+    rate: 0.20
+    base_max: 100000
+
+# Aportaciones a sistemas de previsión social (arts. 51.6 и 52.1 LIRPF).
+prevision_social:
+  limite_general: 1500          # art. 52.1.b / 51.6.a — планы пенсий любых видов вместе
+  incremento_autonomo: 4250     # art. 52.1.b.2º — только из planes de empleo simplificados /
+                                # sectoriales для autónomos и т. п.; не умножается по инструментам
+  porcentaje_rendimientos: 0.30 # art. 52.1.a — 30 % суммы rendimientos netos trabajo + actividades
+  # TODO: verify — 30 % применяется к общему лимиту вместе с incremento (так читается art. 52.1).
+  # Не моделируется: incremento 8 500 € по contribuciones empresariales (у autónomo их нет)
+  # и перенос неиспользованного из-за 30 % / нехватки базы на 5 лет (art. 52.2).
+
+# Compensación de rentas negativas (arts. 48, 49, 50.3 LIRPF).
+compensacion:
+  limite_cruzado: 0.25   # доля положительного saldo другой корзины (rcm ↔ ganancias), общая
+                         # для убытков текущего и прошлых лет (Manual práctico 2025, cap. 12)
+  anos: 4                # перенос на 4 следующих года, в максимально возможной сумме

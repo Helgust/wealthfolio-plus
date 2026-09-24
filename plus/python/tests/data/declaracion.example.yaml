@@ -1,0 +1,34 @@
+# Эталон: ваша декларация IRPF из Renta Web. Скопируйте в tests/data/declaracion_<год>.yaml
+# (файл в .gitignore) и заполните. Тест tests/test_declaracion.py сверит модель с декларацией;
+# без файла он пропускается. Суммы — в евро за год, как в декларации.
+year: 2025
+
+# --- Входы ------------------------------------------------------------------
+contribuyente: {edad: 35, discapacidad: ninguna}   # ninguna | grado_33 | grado_65; возраст на 31.12
+descendientes: []            # например: [{edad: 5, share: 0.5}] — share 0.5, если mínimo делится
+ascendientes: []             # например: [{edad: 72}]
+
+actividad:
+  ingresos: 0                # ingresos de explotación (без IVA)
+  gastos: 0                  # gastos deducibles БЕЗ cuota RETA
+  cuota_reta: 0              # фактически уплаченная cuota RETA за год
+  dependiente: false         # применялась reducción art. 32.2.1º
+  inicio_actividad: false    # применялась reducción 20 % art. 32.3
+
+rendimientos_trabajo: 0      # rendimiento neto del trabajo
+rcm: 0                       # saldo rendimientos del capital mobiliario (база сбережений)
+ganancias: 0                 # saldo ganancias y pérdidas patrimoniales (база сбережений)
+aportacion_pensiones: 0      # взносы в обычные планы пенсий
+aportacion_pensiones_autonomo: 0  # в planes de empleo simplificados для autónomos
+deducciones: {estatal: 0, autonomica: 0}  # суммы deducciones по половинам
+
+# --- Эталон из декларации -----------------------------------------------------
+# Заполните, что есть; пустые (null) поля не проверяются.
+esperado:
+  rendimiento_neto_actividad: null
+  base_liquidable_general: null
+  base_liquidable_ahorro: null
+  cuota_integra_estatal: null
+  cuota_integra_autonomica: null
+  cuota_liquida_estatal: null
+  cuota_liquida_autonomica: null

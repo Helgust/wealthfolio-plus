@@ -1,0 +1,38 @@
+# Cuota RETA (Régimen Especial de Trabajadores Autónomos) — cotización por rendimientos reales.
+# Система с 2023 г.: art. 308 LGSS (RDL 8/2015) в редакции RDL 13/2022.
+# Таблицы и ставки на 2025: Orden PJC/178/2025, de 25 de febrero (BOE-A-2025-3780), arts. 18 и 37.
+# Суммы в евро в МЕСЯЦ; модель переводит в год (× 12).
+
+# Rendimiento computable для выбора tramo (art. 308.1.c LGSS, regla 1.ª y 2.ª):
+# rendimiento neto IRPF (estimación directa) + собственные cuotas RETA,
+# затем минус deducción por gastos genéricos — 7 % (3 % для autónomos societarios, art. 305.2.b/e).
+gastos_genericos: 0.07
+
+base_maxima: 4909.50   # art. 18.1: base máxima независимо от rendimientos
+
+tipos:                        # доли базы; сумма — полная ставка
+  contingencias_comunes: 0.283      # art. 18.2.a
+  contingencias_profesionales: 0.013  # art. 18.2.b (0,66 % IT + 0,64 % IP y muerte)
+  cese_actividad: 0.009             # art. 37.5.a
+  formacion_profesional: 0.001      # art. 37.6
+  mei: 0.008                         # art. 18.2.c — mecanismo de equidad intergeneracional
+
+# Tramos rendimientos netos мес. (art. 18.1): tabla reducida 1–3, затем tabla general 1–12.
+# upto — верхняя граница включительно («≤»); inclusive: false — строго меньше («<»).
+# У последнего tramo upto: null. base_max последних двух = base_maxima.
+tramos:
+  - {tabla: reducida, tramo: 1,  upto: 670,     base_min: 653.59,  base_max: 718.94}
+  - {tabla: reducida, tramo: 2,  upto: 900,     base_min: 718.95,  base_max: 900.00}
+  - {tabla: reducida, tramo: 3,  upto: 1166.70, inclusive: false, base_min: 849.67, base_max: 1166.70}
+  - {tabla: general,  tramo: 1,  upto: 1300,    base_min: 950.98,  base_max: 1300.00}
+  - {tabla: general,  tramo: 2,  upto: 1500,    base_min: 960.78,  base_max: 1500.00}
+  - {tabla: general,  tramo: 3,  upto: 1700,    base_min: 960.78,  base_max: 1700.00}
+  - {tabla: general,  tramo: 4,  upto: 1850,    base_min: 1143.79, base_max: 1850.00}
+  - {tabla: general,  tramo: 5,  upto: 2030,    base_min: 1209.15, base_max: 2030.00}
+  - {tabla: general,  tramo: 6,  upto: 2330,    base_min: 1274.51, base_max: 2330.00}
+  - {tabla: general,  tramo: 7,  upto: 2760,    base_min: 1356.21, base_max: 2760.00}
+  - {tabla: general,  tramo: 8,  upto: 3190,    base_min: 1437.91, base_max: 3190.00}
+  - {tabla: general,  tramo: 9,  upto: 3620,    base_min: 1519.61, base_max: 3620.00}
+  - {tabla: general,  tramo: 10, upto: 4050,    base_min: 1601.31, base_max: 4050.00}
+  - {tabla: general,  tramo: 11, upto: 6000,    base_min: 1732.03, base_max: 4909.50}
+  - {tabla: general,  tramo: 12, upto: null,    base_min: 1928.10, base_max: 4909.50}

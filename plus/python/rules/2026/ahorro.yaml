@@ -1,0 +1,15 @@
+# Шкала базы сбережений (base liquidable del ahorro), arts. 66 и 76 LIRPF.
+# Обе половины задаёт государство; в сумме 19/21/23/27/30 %.
+# Редакция Ley 7/2024 (действует с 2025). TODO: verify для 2026.
+estatal:
+  - {upto: 6000,   rate: 0.095}
+  - {upto: 50000,  rate: 0.105}
+  - {upto: 200000, rate: 0.115}
+  - {upto: 300000, rate: 0.135}
+  - {upto: null,   rate: 0.15}
+autonomica:
+  - {upto: 6000,   rate: 0.095}
+  - {upto: 50000,  rate: 0.105}
+  - {upto: 200000, rate: 0.115}
+  - {upto: 300000, rate: 0.135}
+  - {upto: null,   rate: 0.15}

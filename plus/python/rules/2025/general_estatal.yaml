@@ -1,0 +1,9 @@
+# Государственная половина шкалы общей базы IRPF (art. 63 LIRPF).
+# Без изменений с 2021 г. Сверено: AEAT, Manual práctico IRPF 2025 (art. 63.1 LIRPF).
+scale:
+  - {upto: 12450,  rate: 0.095}
+  - {upto: 20200,  rate: 0.12}
+  - {upto: 35200,  rate: 0.15}
+  - {upto: 60000,  rate: 0.185}
+  - {upto: 300000, rate: 0.225}
+  - {upto: null,   rate: 0.245}

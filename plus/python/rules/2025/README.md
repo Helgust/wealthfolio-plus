@@ -1,0 +1,11 @@
+Правила IRPF на 2025 год (эталон для прошлой декларации). Каждое число с комментарием-источником; непроверенное помечено `TODO: verify`.
+
+| Файл | Содержание | Статус |
+|---|---|---|
+| `general_estatal.yaml` | государственная шкала общей базы | сверено с AEAT 2025 |
+| `general_valencia.yaml` | автономная шкала общей базы | сверено с AEAT 2025 |
+| `ahorro.yaml` | шкала базы сбережений (обе половины) | сверено с AEAT 2025 |
+| `minimos.yaml` | mínimo personal y familiar (обе половины) | государственный — AEAT 2025; Валенсия — AEAT 2025 |
+| `reta.yaml` | tramos RETA, bases, tipos (Orden PJC/178/2025) | сверено с BOE |
+| `actividad.yaml` | gastos de difícil justificación, EDS | сверено с AEAT (5 %, 2 000 €) |
+| `reducciones.yaml` | art. 32.2–32.3, лимиты планов пенсий, compensación | LIRPF (конс. текст 09.2026); 2 пункта TODO: verify |
