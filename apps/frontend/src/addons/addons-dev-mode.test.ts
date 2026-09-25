@@ -85,3 +85,33 @@ describe("development addon reloads", () => {
     manager.devServers.delete(addonId);
   });
 });
+
+describe("development addon contributions", () => {
+  it("restores dev addon sidebar links after the installed-addon reload clears them", async () => {
+    const { clearAllContributions, getDurableNavItems } = await import("./contribution-registry");
+    const manager = addonDevManager as unknown as { devServers: Map<string, unknown> };
+    const addonId = "reingest-test";
+    manager.devServers.set(addonId, {
+      id: addonId,
+      name: "Reingest test",
+      url: "http://localhost:3001",
+      port: 3001,
+      status: "running",
+      manifest: {
+        id: addonId,
+        contributes: {
+          routes: [{ id: addonId }],
+          links: { sidebar: [{ id: addonId, route: addonId, label: "Reingest test" }] },
+        },
+      },
+    });
+
+    // loadInstalledAddons() rebuilds the durable layer from scratch.
+    clearAllContributions();
+    addonDevManager.reingestContributions();
+
+    expect(getDurableNavItems().map((item) => item.title)).toContain("Reingest test");
+    manager.devServers.delete(addonId);
+    clearAllContributions();
+  });
+});

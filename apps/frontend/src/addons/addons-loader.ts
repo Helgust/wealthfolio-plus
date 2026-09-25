@@ -36,6 +36,7 @@ export async function loadAllAddons(): Promise<void> {
 
         // Also load installed addons that aren't in dev mode
         await loadInstalledAddons();
+        addonDevManager.reingestContributions();
         return;
       } else {
         logger.info("🔍 No development servers found, falling back to installed addons");

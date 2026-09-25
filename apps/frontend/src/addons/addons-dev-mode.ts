@@ -19,6 +19,7 @@ interface AddonDevServer {
   port: number;
   status: "running" | "stopped" | "error";
   generation?: number;
+  manifest?: AddonManifest;
 }
 
 interface DevRuntimePackage {
@@ -258,8 +259,9 @@ class AddonDevManager {
     // Dev addons don't flow through loadInstalledAddons, so ingest their
     // manifest contributions here. Clear-then-ingest keeps this idempotent.
     clearAddonContributions(devServer.id);
-    if (runtimePackage.manifest) {
-      ingestAddonContributions(devServer.id, runtimePackage.manifest as AddonManifest);
+    devServer.manifest = (runtimePackage.manifest as AddonManifest | null) ?? undefined;
+    if (devServer.manifest) {
+      ingestAddonContributions(devServer.id, devServer.manifest);
     }
 
     devServer.status = "running";
@@ -478,6 +480,19 @@ class AddonDevManager {
       clearAddonContributions(addonId);
     }
     this.devAddons.clear();
+  }
+
+  /**
+   * Re-ingest manifest contributions of loaded dev addons. loadInstalledAddons()
+   * rebuilds the durable layer from scratch (clearAllContributions), which would
+   * otherwise drop the sidebar entries of dev addons loaded before it.
+   */
+  reingestContributions(): void {
+    for (const server of this.devServers.values()) {
+      if (server.status === "running" && server.manifest) {
+        ingestAddonContributions(server.id, server.manifest);
+      }
+    }
   }
 
   /**
