@@ -26,6 +26,7 @@ const RETURN_FIELDS: [keyof Returns, string][] = [
   ['brokerageGrowth', 'Brokerage price growth'],
   ['brokerageYield', 'Brokerage dividends'],
   ['pensionGrowth', 'Pension plans growth'],
+  ['propertyGrowth', 'Real estate growth'],
 ];
 
 export const MODE_LABEL: Record<Flow['mode'], string> = {

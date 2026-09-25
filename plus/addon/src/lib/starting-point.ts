@@ -1,11 +1,13 @@
-// Plan starting point from Wealthfolio: net worth as on the Net Worth page, and accounts with
-// positions and lots. The Spanish account type is applied separately (buildStart) so changing
-// a type does not reload the portfolio.
+// Plan starting point from Wealthfolio: net worth as on the Net Worth page, accounts with
+// positions and lots, real estate and debts (fork only). The Spanish account type and the real
+// estate settings are applied separately (buildStart) so changing them does not reload the portfolio.
 import type { AddonContext, Holding } from '@wealthfolio/addon-sdk';
 import { positionValue, type Account, type Position } from '../engine/portfolio';
+import type { Loan, Property } from '../engine/real-estate';
 import type { StartingPoint } from '../engine/run-plan';
 import { defaultSetting, type AccountSetting, type AccountSettings } from '../model/accounts';
-import { getNetWorth } from './fork-api';
+import { defaultPropertySetting, type PropertySetting, type RealEstateSettings } from '../model/properties';
+import { getAlternativeHoldings, getNetWorth, type AlternativeAssetHolding } from './fork-api';
 
 export interface WfAccount {
   id: string;
@@ -25,7 +27,23 @@ export interface LoadedPortfolio {
   /** true — net worth from the fork's get_net_worth; false — sum of account valuations (official build) */
   exact: boolean;
   accounts: WfAccount[];
+  /** Alternative assets (real estate, debts, …); null — unavailable in the official build */
+  alternatives: AlternativeAssetHolding[] | null;
 }
+
+const isKind = (kind: string) => (h: AlternativeAssetHolding) => h.kind.toUpperCase() === kind;
+export const isProperty = isKind('PROPERTY');
+export const isLiability = isKind('LIABILITY');
+
+export const propertySettingFor = (settings: RealEstateSettings, h: AlternativeAssetHolding): PropertySetting =>
+  settings.properties[h.id] ?? defaultPropertySetting(h.metadata?.sub_type as string | undefined);
+
+/** Annual rate of a liability: Wealthfolio keeps interest_rate in percent. */
+export const liabilityRate = (h: AlternativeAssetHolding) => Number(h.metadata?.interest_rate ?? 0) / 100;
+
+/** The property a liability finances, if linked. */
+export const linkedProperty = (h: AlternativeAssetHolding): string | null =>
+  h.linkedAssetId ?? (h.metadata?.linked_asset_id as string | undefined) ?? null;
 
 export const settingFor = (settings: AccountSettings, a: WfAccount): AccountSetting =>
   settings[a.id] ?? defaultSetting(a.accountType);
@@ -89,22 +107,67 @@ export async function loadPortfolio(ctx: AddonContext): Promise<LoadedPortfolio>
     })),
   );
 
-  const nw = await getNetWorth(ctx);
+  const [nw, alternatives] = await Promise.all([getNetWorth(ctx), getAlternativeHoldings(ctx)]);
   if (nw) {
-    return { netWorth: Number(nw.netWorth), currency: nw.currency, exact: true, accounts };
+    return { netWorth: Number(nw.netWorth), currency: nw.currency, exact: true, accounts, alternatives };
   }
   return {
     netWorth: valuations.reduce((s, v) => s + v.totalValueBase, 0),
     currency: valuations[0]?.baseCurrency ?? null,
     exact: false,
     accounts,
+    alternatives,
   };
 }
 
-/** Engine starting point: accounts with a Spanish type; other stays in net worth as is. */
-export function buildStart(portfolio: LoadedPortfolio, settings: AccountSettings): StartingPoint {
+/**
+ * Engine starting point: accounts with a Spanish type, properties with a use, loans with a monthly
+ * payment. Everything else stays in net worth as is.
+ */
+export function buildStart(
+  portfolio: LoadedPortfolio,
+  settings: AccountSettings,
+  realEstate: RealEstateSettings = { properties: {}, loans: {} },
+): StartingPoint {
+  const alternatives = portfolio.alternatives ?? [];
+  const properties = alternatives.filter(isProperty).flatMap((h): Property[] => {
+    const s = propertySettingFor(realEstate, h);
+    if (s.use === 'other') return [];
+    const value = Number(h.marketValue);
+    // Without a purchase price the gain counts from today's value.
+    const price = h.purchasePrice ? Number(h.purchasePrice) : value;
+    return [
+      {
+        id: h.id,
+        name: h.name,
+        value,
+        use: s.use,
+        owner: s.owner,
+        valorCatastral: s.valorCatastral,
+        catastroRevisado: s.catastroRevisado,
+        ibi: s.ibi,
+        acquisitionValue: price + s.acquisitionCosts,
+      },
+    ];
+  });
+  const loans = alternatives.filter(isLiability).flatMap((h): Loan[] => {
+    const payment = realEstate.loans[h.id]?.monthlyPayment ?? 0;
+    if (payment <= 0) return [];
+    return [
+      {
+        id: h.id,
+        name: h.name,
+        balance: Math.abs(Number(h.marketValue)),
+        rate: liabilityRate(h),
+        monthlyPayment: payment,
+        propertyId: linkedProperty(h),
+      },
+    ];
+  });
   return {
     netWorth: portfolio.netWorth,
+    properties,
+    loans,
     accounts: portfolio.accounts.flatMap((a): Account[] => {
       const { kind, owner } = settingFor(settings, a);
       if (kind === 'other') return [];

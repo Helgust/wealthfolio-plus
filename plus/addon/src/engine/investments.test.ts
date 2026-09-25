@@ -45,6 +45,7 @@ describe('returns', () => {
         brokerageGrowth: 0.04,
         brokerageYield: 0.03,
         pensionGrowth: 0.06,
+        propertyGrowth: 0,
       },
     });
     const s = start(

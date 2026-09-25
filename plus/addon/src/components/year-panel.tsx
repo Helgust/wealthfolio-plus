@@ -36,6 +36,8 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
         ['Seguridad Social pension', row.publicPension],
         ['Interest & dividends', row.investmentIncome],
         ['Pension plan payouts', row.pensionWithdrawals],
+        ['Property sale', row.realEstate.saleProceeds],
+        ['New mortgage', row.realEstate.newLoans],
       ],
     ],
     [
@@ -47,6 +49,11 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
         ['IRPF autonómica', row.irpfAutonomica],
         ['Essential expenses', row.essentialExpenses],
         ['Discretionary expenses', row.discretionaryExpenses],
+        ['IBI', row.realEstate.ibi],
+        ['Loan interest', row.realEstate.loanInterest],
+        ['Loan principal', row.realEstate.loanPrincipal + row.realEstate.loanRepaidAtSale],
+        ['Property purchase', row.realEstate.purchaseCost],
+        ['Purchase tax', row.realEstate.purchaseTax],
       ],
     ],
     [
@@ -55,6 +62,8 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
         ['Net cash flow', row.netCashFlow],
         ['Pension plan contributions', row.pensionContributions],
         ['Realized gains', row.realizedGains],
+        ['Property gain, taxed', row.realEstate.gains.reduce((s, x) => s + x, 0)],
+        ['Property gain, exempt', row.realEstate.exemptGains],
       ],
     ],
     [
@@ -64,6 +73,8 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
         ['Fondos', row.balances.fund],
         ['Brokerage', row.balances.brokerage],
         ['Pension plans', row.balances.pension],
+        ['Real estate', row.propertyValue],
+        ['Loans', -row.loanBalance],
         ['Outside the model', row.otherAssets],
       ],
     ],

@@ -89,6 +89,52 @@ describe('loadPortfolio', () => {
     expect(accountCost(s.accounts[1])).toBeCloseTo(100 + 810, 9);
   });
 
+  it('official build: no real estate (getAlternativeHoldings unavailable)', async () => {
+    const p = await loadPortfolio(ctx);
+    expect(p.alternatives).toBeNull();
+    expect(buildStart(p, {}).properties).toEqual([]);
+  });
+
+  it('real estate: properties with a use, loans with a monthly payment', async () => {
+    const p = await loadPortfolio(ctx);
+    const alternatives = [
+      {
+        id: 'PROP-1',
+        kind: 'PROPERTY',
+        name: 'Home',
+        currency: 'EUR',
+        marketValue: '300000',
+        purchasePrice: '150000',
+        valuationDate: '2026-09-01',
+        metadata: { sub_type: 'residence' },
+      },
+      { id: 'PROP-2', kind: 'PROPERTY', name: 'Plot', currency: 'EUR', marketValue: '40000', valuationDate: '2026-09-01', metadata: { sub_type: 'land' } },
+      {
+        id: 'LIAB-1',
+        kind: 'LIABILITY',
+        name: 'Mortgage',
+        currency: 'EUR',
+        marketValue: '80000',
+        valuationDate: '2026-09-01',
+        metadata: { sub_type: 'mortgage', interest_rate: '3.5' },
+        linkedAssetId: 'PROP-1',
+      },
+    ];
+    const withAlt = { ...p, alternatives };
+    // Defaults: a residence is the vivienda habitual, land stays outside; a loan without a payment stays constant.
+    let s = buildStart(withAlt, {});
+    expect(s.properties).toEqual([expect.objectContaining({ id: 'PROP-1', use: 'habitual', value: 300_000, acquisitionValue: 150_000 })]);
+    expect(s.loans).toEqual([]);
+    s = buildStart(withAlt, {}, {
+      properties: { 'PROP-1': { use: 'second', owner: 0, valorCatastral: 90_000, catastroRevisado: true, ibi: 400, acquisitionCosts: 12_000 } },
+      loans: { 'LIAB-1': { monthlyPayment: 700 } },
+    });
+    expect(s.properties![0]).toMatchObject({ use: 'second', acquisitionValue: 162_000, valorCatastral: 90_000 });
+    expect(s.loans).toEqual([
+      { id: 'LIAB-1', name: 'Mortgage', balance: 80_000, rate: 0.035, monthlyPayment: 700, propertyId: 'PROP-1' },
+    ]);
+  });
+
   it('applies saved Spanish types and owners', async () => {
     const p = await loadPortfolio(ctx);
     const s = buildStart(p, { broker: { kind: 'fund', owner: 1 }, bank: { kind: 'other', owner: 'joint' } });

@@ -155,8 +155,8 @@ export function AccountsTab({ portfolio, settings, people, currency, onChange }:
       <p className="text-muted-foreground text-xs">
         Cash earns interest and brokerage pays dividends every year (base del ahorro). Fondos only
         grow, and a traspaso between them is not taxed. Pension plans lower the base general when
-        you contribute, and payouts are taxed as trabajo. “Not modelled” accounts, alternative
-        assets and debts stay constant. Gains use the cost basis from Wealthfolio, sold FIFO.
+        you contribute, and payouts are taxed as trabajo. “Not modelled” accounts stay constant;
+        real estate and debts are set up below. Gains use the cost basis from Wealthfolio, sold FIFO.
       </p>
     </div>
   );

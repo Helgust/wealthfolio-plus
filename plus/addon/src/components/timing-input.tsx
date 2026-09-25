@@ -108,5 +108,7 @@ export function milestoneUses(plan: Plan, m: Milestone): string[] {
   });
   plan.expenses.forEach((e) => (at(e.start) || at(e.end)) && uses.push(e.name));
   if (plan.spending.kind !== 'planned' && at(plan.spending.start)) uses.push('the spending rule');
+  if (plan.propertySales.some((s) => at(s.timing))) uses.push('a property sale');
+  plan.propertyPurchases.forEach((p) => at(p.timing) && uses.push(p.name));
   return uses;
 }

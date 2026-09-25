@@ -28,13 +28,15 @@ import { PageMessage } from '../components/page-message';
 import { PlanEditor, type EditorSection } from '../components/plan-editor';
 import { PlanSwitcher } from '../components/plan-switcher';
 import { PlanTab } from '../components/plan-tab';
+import { RealEstateSettingsTable } from '../components/real-estate-settings';
 import { TaxesTab } from '../components/taxes-tab';
 import { YearPanel } from '../components/year-panel';
 import { runPlan, type PlanResult } from '../engine/run-plan';
 import { availableYears } from '../es-tax';
-import { SETTINGS_KEY, usePlannerData } from '../hooks/use-planner-data';
+import { REAL_ESTATE_KEY, SETTINGS_KEY, usePlannerData } from '../hooks/use-planner-data';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 import { saveAccountSettings, type AccountSettings } from '../model/accounts';
+import { saveRealEstateSettings, type RealEstateSettings } from '../model/properties';
 import { defaultPlan, type Plan } from '../model/plan';
 import {
   activeEntry,
@@ -68,7 +70,7 @@ function Stub({ children }: { children: string }) {
 
 export function PlanPage({ ctx }: { ctx: AddonContext }) {
   const queryClient = useQueryClient();
-  const { portfolio, settings, book, start, error, changePlans } = usePlannerData(ctx);
+  const { portfolio, settings, realEstate, book, start, error, changePlans } = usePlannerData(ctx);
   const [mode, setMode] = useState<ValueMode>('nominal');
   const [editing, setEditing] = useState<EditorSection | null>(null);
   const [year, setYear] = useState<number | null>(null);
@@ -102,8 +104,13 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     await saveAccountSettings(ctx, next);
   }
 
+  async function saveRealEstate(next: RealEstateSettings) {
+    queryClient.setQueryData<RealEstateSettings>(REAL_ESTATE_KEY, next);
+    await saveRealEstateSettings(ctx, next);
+  }
+
   if (error) return <PageMessage error={error} />;
-  if (!plan || !active || !book || !start || !portfolio || !settings || !result) {
+  if (!plan || !active || !book || !start || !portfolio || !settings || !realEstate || !result) {
     return <PageMessage />;
   }
 
@@ -215,7 +222,15 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
           </TabsList>
           <TabsContent value="plan">
-            <PlanTab plan={plan} result={result} accounts={start.accounts} currency={currency} onEdit={setEditing} />
+            <PlanTab
+              plan={plan}
+              result={result}
+              accounts={start.accounts}
+              properties={start.properties ?? []}
+              loans={start.loans ?? []}
+              currency={currency}
+              onEdit={setEditing}
+            />
           </TabsContent>
           <TabsContent value="cashflow">
             <CashflowTab rows={rows} currency={currency} mode={mode} />
@@ -237,6 +252,14 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               currency={currency}
               onChange={saveSettings}
             />
+            <h3 className="pt-6 pb-2 font-medium">Real estate and loans</h3>
+            <RealEstateSettingsTable
+              alternatives={portfolio.alternatives}
+              settings={realEstate}
+              people={plan.people.map((p) => p.name)}
+              currency={currency}
+              onChange={saveRealEstate}
+            />
           </TabsContent>
         </Tabs>
 
@@ -251,6 +274,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
       <PlanEditor
         plan={plan}
         accounts={start.accounts}
+        properties={start.properties ?? []}
         section={editing}
         onClose={() => setEditing(null)}
         onSave={save}

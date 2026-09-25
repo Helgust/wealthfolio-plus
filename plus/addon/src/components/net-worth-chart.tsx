@@ -17,7 +17,7 @@ import {
 import { useRef } from 'react';
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
-import { FOREST, OCHRE, PURPLE, TERRACOTTA } from './palette';
+import { FOREST, OCHRE, PURPLE, STONE, TERRACOTTA } from './palette';
 
 // Stack order is bottom to top — the palette order, validated for adjacent pairs.
 const config = {
@@ -25,9 +25,10 @@ const config = {
   fund: { label: 'Fondos', theme: OCHRE },
   brokerage: { label: 'Brokerage', theme: TERRACOTTA },
   pension: { label: 'Pension plans', theme: PURPLE },
+  realEstate: { label: 'Real estate equity', theme: STONE },
   netWorth: { label: 'Net worth', color: 'var(--foreground)' },
 } satisfies ChartConfig;
-const STACK = ['cash', 'fund', 'brokerage', 'pension'] as const;
+const STACK = ['cash', 'fund', 'brokerage', 'pension', 'realEstate'] as const;
 
 interface Props {
   rows: LedgerRow[];
@@ -51,6 +52,8 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
     fund: inMode(r.balances.fund, r.deflator, mode),
     brokerage: inMode(r.balances.brokerage, r.deflator, mode),
     pension: inMode(r.balances.pension, r.deflator, mode),
+    // Property less the loans on it; negative equity shows only in the net worth line.
+    realEstate: inMode(Math.max(r.propertyValue - r.loanBalance, 0), r.deflator, mode),
     milestones: r.milestones.map((id) => milestoneNames[id] ?? id).join(', '),
   }));
   return (

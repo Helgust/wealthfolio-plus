@@ -28,6 +28,12 @@ const COLUMNS: Column[] = [
   { label: 'Fondos', value: (r) => r.balances.fund },
   { label: 'Brokerage', value: (r) => r.balances.brokerage },
   { label: 'Pension plans', value: (r) => r.balances.pension },
+  { label: 'Real estate', value: (r) => r.propertyValue },
+  { label: 'Loans', value: (r) => -r.loanBalance },
+  { label: 'IBI', value: (r) => r.realEstate.ibi },
+  { label: 'Imputed rent', value: (r) => r.realEstate.imputedRent.reduce((s, x) => s + x, 0) },
+  { label: 'Loan payments', value: (r) => r.realEstate.loanInterest + r.realEstate.loanPrincipal },
+  { label: 'Property gains', value: (r) => r.realEstate.gains.reduce((s, x) => s + x, 0) },
   { label: 'Outside the model', value: (r) => r.otherAssets },
   { label: 'Net worth', value: (r) => r.netWorth },
 ];

@@ -1,6 +1,7 @@
 // Deterministic yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
-// milestones → account income and growth → autónomo income and RETA, public pensions → expenses
-// (a spending rule sets the discretionary ones) → IRPF → surplus through flows,
+// milestones → account income and growth → autónomo income and RETA, public pensions → real
+// estate and loans → expenses (a spending rule sets the discretionary ones) → IRPF → surplus
+// through flows,
 // or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
 // Amounts are nominal; deflator converts them to euros of the plan's first year.
 import {
@@ -23,6 +24,15 @@ import {
 import { isPension, type Owner } from '../model/accounts';
 import type { Filing, Plan, SpendingRule } from '../model/plan';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
+import {
+  loansBalance,
+  propertiesValue,
+  realEstateCash,
+  realEstateYear,
+  type Loan,
+  type Property,
+  type RealEstateYear,
+} from './real-estate';
 import { isActive, reachMilestones } from './timing';
 
 /** Current finances from Wealthfolio at the plan start (base currency). */
@@ -30,6 +40,9 @@ export interface StartingPoint {
   netWorth: number;
   /** Modelled accounts; everything else (other, alternative assets, debts) stays constant */
   accounts: Account[];
+  /** Modelled real estate and loans (Wealthfolio alternative assets with a setting) */
+  properties?: Property[];
+  loans?: Loan[];
 }
 
 export interface PersonYear {
@@ -90,6 +103,11 @@ export interface LedgerRow {
   /** Price growth of positions; interest and dividends are paid out as investmentIncome instead */
   marketGrowth: number;
   balances: Balances;
+  /** Modelled real estate at the end of the year */
+  propertyValue: number;
+  /** Modelled loans still owed at the end of the year */
+  loanBalance: number;
+  realEstate: RealEstateYear;
   /** Sum of CASH accounts; < 0 — money ran out, the deficit is debt */
   cash: number;
   /** Everything outside the model; does not change */
@@ -115,6 +133,8 @@ interface Carry {
 
 /** A person's income for the year besides the activity, and pension plan contributions — for IRPF. */
 interface PersonRentas {
+  /** Other renta general: imputación de rentas inmobiliarias */
+  otras: number;
   rcm: number;
   ganancias: number;
   trabajo: number;
@@ -122,7 +142,7 @@ interface PersonRentas {
   ppes: number;
 }
 
-const emptyRentas = (): PersonRentas => ({ rcm: 0, ganancias: 0, trabajo: 0, ppi: 0, ppes: 0 });
+const emptyRentas = (): PersonRentas => ({ otras: 0, rcm: 0, ganancias: 0, trabajo: 0, ppi: 0, ppes: 0 });
 
 /** Account for leftover surplus and shortfalls when the model has no CASH account. */
 export const SINK_ID = '__cash';
@@ -190,7 +210,13 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
   let carries: Carry[] = plan.people.map(() => ({}));
   let jointCarry: Carry = {};
   let accounts = start.accounts.map(cloneAccount);
-  const otherAssets = start.netWorth - start.accounts.reduce((s, a) => s + accountValue(a), 0);
+  const properties = (start.properties ?? []).map((p) => ({ ...p }));
+  const loans = (start.loans ?? []).map((l) => ({ ...l }));
+  const otherAssets =
+    start.netWorth -
+    start.accounts.reduce((s, a) => s + accountValue(a), 0) -
+    propertiesValue(properties) +
+    loansBalance(loans);
   let sinkId = accounts.find((a) => a.kind === 'cash')?.id;
   if (sinkId === undefined) {
     sinkId = SINK_ID;
@@ -244,6 +270,9 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       p.pension && isActive(p.pension.start, null, year, plan, reached) ? p.pension.amount * deflator : 0,
     );
     pensions.forEach((v, i) => (base[i].trabajo += v));
+    const re = realEstateYear(plan, year, rules, properties, loans, reached, ages);
+    re.imputedRent.forEach((v, i) => (base[i].otras += v));
+    re.gains.forEach((g, i) => (base[i].ganancias += g));
     const personas: Persona[] = plan.people.map((p, i) => ({
       edad: ages[i],
       discapacidad: p.disability,
@@ -275,7 +304,14 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     const reta = sum((p) => p.cuotaReta);
     const publicPension = sum((p) => p.publicPension);
     let cf0 =
-      revenue - businessExpenses - reta + publicPension - essential - discretionary + investmentIncome;
+      revenue -
+      businessExpenses -
+      reta +
+      publicPension -
+      essential -
+      discretionary +
+      investmentIncome +
+      realEstateCash(re);
 
     const tax = (extra: PersonRentas[]) =>
       taxYear(plan, year, rules, filing, personas, acts, extra, carries, jointCarry);
@@ -397,9 +433,12 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       ruleWithdrawal,
       marketGrowth,
       balances,
+      propertyValue: propertiesValue(properties),
+      loanBalance: loansBalance(loans),
+      realEstate: re,
       cash: balances.cash,
       otherAssets,
-      netWorth: totalOf(balances) + otherAssets,
+      netWorth: totalOf(balances) + propertiesValue(properties) - loansBalance(loans) + otherAssets,
       deflator,
       milestones: reachedNow.map((m) => m.id),
     });
@@ -494,6 +533,7 @@ function taxYear(
     rendimiento_actividad: acts[i]?.rendimiento_neto ?? 0,
     // Pension plan payouts are rendimientos íntegros del trabajo: otros gastos and reducción art. 20.
     trabajo_integro: e.trabajo,
+    otras_rentas_general: e.otras,
     rcm: e.rcm,
     ganancias: e.ganancias,
     aportacion_pensiones: e.ppi,

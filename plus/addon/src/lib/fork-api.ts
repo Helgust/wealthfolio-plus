@@ -5,7 +5,7 @@ import type { AddonContext } from '@wealthfolio/addon-sdk';
 // Copy of AlternativeAssetHolding from the fork's packages/addon-sdk (fields the addon needs).
 export interface AlternativeAssetHolding {
   id: string;
-  /** property, vehicle, collectible, precious, liability, other */
+  /** PROPERTY, VEHICLE, COLLECTIBLE, PRECIOUS_METAL, LIABILITY, OTHER (Rust AssetKind, SCREAMING_SNAKE_CASE) */
   kind: string;
   name: string;
   currency: string;

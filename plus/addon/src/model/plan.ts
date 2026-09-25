@@ -4,6 +4,7 @@
 // zeros. New fields have defaults and old ones are upgraded (upgradeLegacy), so plans of earlier
 // phases load without migration.
 import { z } from 'zod';
+import { OwnerSchema } from './accounts';
 
 const money = z.number().finite().min(0);
 const rate = z.number().finite().min(-0.5).max(0.5);
@@ -119,6 +120,41 @@ export const ReturnsSchema = z.object({
   brokerageYield: rate,
   /** Growth of planes de pensiones */
   pensionGrowth: rate,
+  /** Nominal growth of real estate values */
+  propertyGrowth: rate.default(0.02),
+});
+
+/** Sale of a property from Wealthfolio: at its projected value, less selling costs. */
+export const PropertySaleSchema = z.object({
+  propertyId: z.string().min(1),
+  timing: TimingSchema,
+  /** Agency, notary, plusvalía municipal — share of the price */
+  costs: share,
+});
+
+/**
+ * Purchase of a home. The purchase tax (ITP for a second-hand home, IVA + AJD for a new one) is
+ * paid on top of the price; the mortgage is an annuity from the next year.
+ */
+export const PropertyPurchaseSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(60),
+  timing: TimingSchema,
+  /** First-year prices */
+  price: money,
+  newBuild: z.boolean(),
+  habitual: z.boolean(),
+  owner: OwnerSchema,
+  /** IBI per year from the next year, first-year prices */
+  ibi: money,
+  mortgage: z
+    .object({
+      /** First-year prices */
+      amount: money,
+      rate: z.number().finite().min(0).max(0.2),
+      years: z.number().int().min(1).max(40),
+    })
+    .nullable(),
 });
 
 /**
@@ -139,6 +175,7 @@ export const DEFAULT_RETURNS: Returns = {
   brokerageGrowth: 0.045,
   brokerageYield: 0.015,
   pensionGrowth: 0.05,
+  propertyGrowth: 0.02,
 };
 
 const isObject = (x: unknown): x is Record<string, unknown> =>
@@ -197,6 +234,8 @@ const PlanObject = z
      * automatically) or indexed — money thresholds grow with the plan's inflation.
      */
     taxRules: z.enum(['frozen', 'indexed']).default('frozen'),
+    propertySales: z.array(PropertySaleSchema).max(10).default([]),
+    propertyPurchases: z.array(PropertyPurchaseSchema).max(10).default([]),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
     message: 'Joint filing needs two people',
@@ -210,6 +249,8 @@ export type Milestone = z.infer<typeof MilestoneSchema>;
 export type AutonomoIncome = z.infer<typeof AutonomoIncomeSchema>;
 export type PublicPension = z.infer<typeof PublicPensionSchema>;
 export type SpendingRule = z.infer<typeof SpendingRuleSchema>;
+export type PropertySale = z.infer<typeof PropertySaleSchema>;
+export type PropertyPurchase = z.infer<typeof PropertyPurchaseSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
 export type Expense = z.infer<typeof ExpenseSchema>;
@@ -259,5 +300,7 @@ export function defaultPlan(startYear: number): Plan {
     milestones: [{ id: 'retirement', name: 'Retirement', trigger: { kind: 'age', person: 0, age: 65 } }],
     spending: { kind: 'planned' },
     taxRules: 'frozen',
+    propertySales: [],
+    propertyPurchases: [],
   };
 }

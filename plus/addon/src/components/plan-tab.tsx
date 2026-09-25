@@ -4,10 +4,12 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@wealth
 import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Account } from '../engine/portfolio';
+import type { Loan, Property } from '../engine/real-estate';
 import { withdrawalOrder, type PlanResult } from '../engine/run-plan';
 import { formatMoney, formatPercent } from '../lib/format';
 import { KIND_LABEL } from '../model/accounts';
 import type { Milestone, Plan } from '../model/plan';
+import { USE_LABEL } from '../model/properties';
 import { MODE_LABEL } from './investments-editor';
 import type { EditorSection } from './plan-editor';
 import { spanLabel, timingLabel } from './timing-input';
@@ -16,6 +18,8 @@ interface Props {
   plan: Plan;
   result: PlanResult;
   accounts: Account[];
+  properties: Property[];
+  loans: Loan[];
   currency: string;
   onEdit: (section: EditorSection) => void;
 }
@@ -45,7 +49,7 @@ function Line({ main, detail }: { main: ReactNode; detail: ReactNode }) {
 
 const Empty = ({ children }: { children: string }) => <p className="text-muted-foreground">{children}</p>;
 
-export function PlanTab({ plan, result, accounts, currency, onEdit }: Props) {
+export function PlanTab({ plan, result, accounts, properties, loans, currency, onEdit }: Props) {
   const years = result.milestoneYears;
   const money = (v: number) => formatMoney(v, currency);
   const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? 'Missing account';
@@ -161,6 +165,45 @@ export function PlanTab({ plan, result, accounts, currency, onEdit }: Props) {
             .join(' → ') || 'No accounts'}
         </div>
         <div className="text-muted-foreground text-xs">Pension plans from age {plan.pensionAccessAge}.</div>
+      </PlanCard>
+
+      <PlanCard title="Real estate" onEdit={() => onEdit('realEstate')}>
+        {properties.length + loans.length + plan.propertyPurchases.length === 0 && (
+          <Empty>No modelled real estate. Set a use for Wealthfolio properties on the Accounts tab, or plan a purchase.</Empty>
+        )}
+        {properties.map((p) => (
+          <Line
+            key={p.id}
+            main={
+              <span className="flex items-center gap-2">
+                <span className="font-medium">{p.name}</span>
+                <Badge variant="outline">{USE_LABEL[p.use]}</Badge>
+              </span>
+            }
+            detail={`${money(p.value)} today`}
+          />
+        ))}
+        {loans.map((l) => (
+          <Line
+            key={l.id}
+            main={<span className="font-medium">{l.name}</span>}
+            detail={`${money(l.balance)} owed · ${money(l.monthlyPayment)} a month · ${formatPercent(l.rate)}`}
+          />
+        ))}
+        {plan.propertySales.map((s, i) => (
+          <Line
+            key={`sale${i}`}
+            main={`Sell ${properties.find((p) => p.id === s.propertyId)?.name ?? 'a missing property'}`}
+            detail={timingLabel(s.timing, plan, years)}
+          />
+        ))}
+        {plan.propertyPurchases.map((p) => (
+          <Line
+            key={p.id}
+            main={`Buy ${p.name} · ${money(p.price)}${p.mortgage ? `, mortgage ${money(p.mortgage.amount)}` : ''}`}
+            detail={`${timingLabel(p.timing, plan, years)} · ${p.newBuild ? 'new' : 'second-hand'}${p.habitual ? ', vivienda habitual' : ''}`}
+          />
+        ))}
       </PlanCard>
     </div>
   );

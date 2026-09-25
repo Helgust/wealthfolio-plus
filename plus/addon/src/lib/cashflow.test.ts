@@ -14,9 +14,21 @@ function expectBalanced(rows: LedgerRow[], start: StartingPoint) {
     const sources = sum(f.sources);
     // Sources = uses: income + withdrawals + shortfall = taxes + spending + deposits.
     expect(sum(f.uses)).toBeCloseTo(sources, 4);
-    // Net worth change = deposits − withdrawals − shortfall + market growth.
+    // Net worth change = deposits − withdrawals − shortfall + market growth, plus what real estate
+    // and loans changed outside cash: appreciation, homes bought and sold, debt paid and taken.
     const before = i === 0 ? start.netWorth : rows[i - 1].netWorth;
-    const explained = totalOf(r.deposits) - totalOf(r.withdrawals) - r.shortfall + r.marketGrowth;
+    const re = r.realEstate;
+    const explained =
+      totalOf(r.deposits) -
+      totalOf(r.withdrawals) -
+      r.shortfall +
+      r.marketGrowth +
+      re.growth +
+      re.purchaseCost -
+      re.saleValue +
+      re.loanPrincipal +
+      re.loanRepaidAtSale -
+      re.newLoans;
     expect(r.netWorth - before).toBeCloseTo(explained, 4);
   });
 }
@@ -27,6 +39,7 @@ const RETURNS: Plan['returns'] = {
   brokerageGrowth: 0.04,
   brokerageYield: 0.02,
   pensionGrowth: 0.04,
+  propertyGrowth: 0.03,
 };
 
 describe('cash flow of a year', () => {
@@ -105,6 +118,51 @@ describe('cash flow of a year', () => {
     };
     const rows = runPlan(p, start).rows;
     expect(rows.some((r) => r.ruleWithdrawal !== null && r.discretionaryExpenses > 0)).toBe(true);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up with real estate: a second home, a loan, a home sold and a new one bought', () => {
+    const home = {
+      id: 'home',
+      name: 'Home',
+      value: 300_000,
+      use: 'habitual' as const,
+      owner: 'joint' as const,
+      valorCatastral: 90_000,
+      catastroRevisado: false,
+      ibi: 700,
+      acquisitionValue: 120_000,
+    };
+    const flat = { ...home, id: 'flat', name: 'Flat', use: 'second' as const, value: 150_000, owner: 0 as const };
+    const start: StartingPoint = {
+      netWorth: 60_000 + 450_000 - 80_000,
+      accounts: [cashAccount(60_000)],
+      properties: [home, flat],
+      loans: [{ id: 'm', name: 'M', balance: 80_000, rate: 0.03, monthlyPayment: 700, propertyId: 'home' }],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      propertySales: [{ propertyId: 'home', timing: { kind: 'year', year: 2035 }, costs: 0.05 }],
+      propertyPurchases: [
+        {
+          id: 'new',
+          name: 'New home',
+          timing: { kind: 'year', year: 2035 },
+          price: 350_000,
+          newBuild: true,
+          habitual: true,
+          owner: 'joint',
+          ibi: 800,
+          mortgage: { amount: 150_000, rate: 0.035, years: 20 },
+        },
+      ],
+    };
+    const rows = runPlan(p, start).rows;
+    const sale = rows.find((r) => r.year === 2035)!;
+    expect(sale.realEstate.saleProceeds).toBeGreaterThan(0);
+    expect(sale.realEstate.newLoans).toBeGreaterThan(0);
+    expect(rows.every((r) => r.realEstate.imputedRent[0] > 0)).toBe(true);
     expectBalanced(rows, start);
   });
 

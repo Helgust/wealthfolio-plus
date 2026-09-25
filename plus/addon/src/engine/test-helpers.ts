@@ -8,6 +8,7 @@ export const ZERO_RETURNS: Plan['returns'] = {
   brokerageGrowth: 0,
   brokerageYield: 0,
   pensionGrowth: 0,
+  propertyGrowth: 0,
 };
 
 export const cashAccount = (cash: number, id = 'cash'): Account => ({

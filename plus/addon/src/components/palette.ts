@@ -8,3 +8,9 @@ export const FOREST = { light: '#1d7a58', dark: '#2a9168' };
 export const OCHRE = { light: '#b08a14', dark: '#b78f1b' };
 export const TERRACOTTA = { light: '#a9403a', dark: '#c24c46' };
 export const PURPLE = { light: '#7462b8', dark: '#8f7ed2' };
+/**
+ * Neutral for real estate: not a hue of its own (below the chroma floor on purpose), so it goes on
+ * top of the stack next to purple, where it passes color blindness and normal vision checks in both
+ * themes; next to forest it does not.
+ */
+export const STONE = { light: '#5c574d', dark: '#c4bfb2' };

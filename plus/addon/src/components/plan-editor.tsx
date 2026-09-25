@@ -21,6 +21,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Account } from '../engine/portfolio';
+import type { Property } from '../engine/real-estate';
 import { availableYears } from '../es-tax';
 import {
   PlanSchema,
@@ -32,9 +33,10 @@ import {
 } from '../model/plan';
 import { Field, NumberInput, PercentInput } from './form-fields';
 import { InvestmentsEditor } from './investments-editor';
+import { RealEstateEditor } from './real-estate-editor';
 import { milestoneUses, TimingInput } from './timing-input';
 
-export type EditorSection = 'all' | 'household' | 'milestones' | 'expenses' | 'investments';
+export type EditorSection = 'all' | 'household' | 'milestones' | 'expenses' | 'investments' | 'realEstate';
 
 const TITLES: Record<EditorSection, string> = {
   all: 'Edit plan',
@@ -42,6 +44,7 @@ const TITLES: Record<EditorSection, string> = {
   milestones: 'Milestones',
   expenses: 'Household expenses',
   investments: 'Returns, flows and withdrawals',
+  realEstate: 'Real estate: sales and purchases',
 };
 
 interface Props {
@@ -52,9 +55,11 @@ interface Props {
   onSave: (plan: Plan) => Promise<void>;
   /** Modelled accounts — for flows and the withdrawal order */
   accounts: Account[];
+  /** Modelled properties — the ones a plan can sell */
+  properties: Property[];
 }
 
-export function PlanEditor({ plan, section, onClose, onSave, accounts }: Props) {
+export function PlanEditor({ plan, section, onClose, onSave, accounts, properties }: Props) {
   return (
     <Sheet open={section !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="overflow-y-auto" style={{ width: 640, maxWidth: 640 }}>
@@ -64,7 +69,14 @@ export function PlanEditor({ plan, section, onClose, onSave, accounts }: Props) 
         </SheetHeader>
         {/* The form mounts on open, so the draft always starts from the plan. */}
         {section && (
-          <PlanForm plan={plan} section={section} accounts={accounts} onSave={onSave} onCancel={onClose} />
+          <PlanForm
+            plan={plan}
+            section={section}
+            accounts={accounts}
+            properties={properties}
+            onSave={onSave}
+            onCancel={onClose}
+          />
         )}
       </SheetContent>
     </Sheet>
@@ -97,12 +109,14 @@ function PlanForm({
   plan,
   section,
   accounts,
+  properties,
   onSave,
   onCancel,
 }: {
   plan: Plan;
   section: EditorSection;
   accounts: Account[];
+  properties: Property[];
   onSave: (plan: Plan) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -134,6 +148,7 @@ function PlanForm({
     show('milestones') && <MilestonesSection key="milestones" draft={draft} set={set} titled={section === 'all'} />,
     show('expenses') && <ExpensesSection key="expenses" draft={draft} set={set} titled={section === 'all'} />,
     show('investments') && <InvestmentsEditor key="investments" draft={draft} set={set} accounts={accounts} />,
+    show('realEstate') && <RealEstateEditor key="realEstate" draft={draft} set={set} properties={properties} />,
   ].filter(Boolean);
 
   return (
