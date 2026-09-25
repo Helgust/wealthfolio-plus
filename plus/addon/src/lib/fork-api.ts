@@ -37,3 +37,26 @@ export async function getAlternativeHoldings(
     return null;
   }
 }
+
+// Копия NetWorth из packages/addon-sdk форка. Суммы — десятичные строки в базовой валюте.
+export interface NetWorth {
+  date: string;
+  assets: { total: string };
+  liabilities: { total: string };
+  netWorth: string;
+  currency: string;
+}
+
+type PortfolioWithNetWorth = AddonContext['api']['portfolio'] & {
+  getNetWorth: (date?: string) => Promise<NetWorth>;
+};
+
+/** Net worth как на странице Net Worth; null — метод недоступен (официальная сборка). */
+export async function getNetWorth(ctx: AddonContext): Promise<NetWorth | null> {
+  try {
+    return await (ctx.api.portfolio as PortfolioWithNetWorth).getNetWorth();
+  } catch (error) {
+    ctx.api.logger.warn(`getNetWorth недоступен: ${String(error)}`);
+    return null;
+  }
+}

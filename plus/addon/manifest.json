@@ -2,7 +2,7 @@
   "id": "planificador-es",
   "name": "Planificador ES",
   "version": "1.0.0",
-  "description": "Испанский финансовый планировщик: IRPF, RETA, проекции",
+  "description": "Spanish financial planner: IRPF, RETA, projections",
   "author": "helgust",
   "main": "dist/addon.js",
   "sdkVersion": "3.8.0",
@@ -12,6 +12,9 @@
     "routes": [
       {
         "id": "planificador-es"
+      },
+      {
+        "id": "planificador-es-checks"
       }
     ],
     "links": {
@@ -42,17 +45,19 @@
       "functions": [
         "getAll"
       ],
-      "purpose": "Стартовые балансы плана: список счетов"
+      "purpose": "Plan starting point: list of accounts"
     },
     {
       "category": "portfolio",
       "functions": [
         "getHoldings",
         "getHistoricalValuations",
+        "getLatestValuations",
         "getIncomeSummary",
-        "getAlternativeHoldings"
+        "getAlternativeHoldings",
+        "getNetWorth"
       ],
-      "purpose": "Позиции с лотами FIFO, история стоимости, доходы, недвижимость и долги для проекции"
+      "purpose": "Starting net worth and cash, FIFO lots, valuation history, income, property and debts for projections"
     }
   ],
   "keywords": [
