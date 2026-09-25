@@ -11,6 +11,7 @@ import {
 import type { Owner } from '../model/accounts';
 import type { Plan, PropertyPurchase } from '../model/plan';
 import type { PropertyUse } from '../model/properties';
+import type { MarketYear } from './market';
 import { timingYear } from './timing';
 
 export interface Property {
@@ -98,6 +99,7 @@ function purchaseYear(p: PropertyPurchase, plan: Plan, reached: ReadonlyMap<stri
 /**
  * One year of real estate: grows values, charges IBI and loan payments, imputes rent, carries out
  * the plan's sales and purchases of this year. Mutates properties and loans.
+ * market — the year's returns; deflatorAt — price level of a calendar year in first-year prices.
  */
 export function realEstateYear(
   plan: Plan,
@@ -107,9 +109,10 @@ export function realEstateYear(
   loans: Loan[],
   reached: ReadonlyMap<string, number>,
   ages: number[],
+  market: MarketYear,
+  deflatorAt: (year: number) => number,
 ): RealEstateYear {
   const n = plan.people.length;
-  const deflatorAt = (y: number) => (1 + plan.inflation) ** (y - plan.startYear);
   const out: RealEstateYear = {
     growth: 0,
     ibi: 0,
@@ -128,7 +131,7 @@ export function realEstateYear(
 
   // Properties owned at the start of the year: growth, IBI, imputación.
   for (const p of properties) {
-    const g = p.value * plan.returns.propertyGrowth;
+    const g = p.value * market.propertyGrowth;
     p.value += g;
     out.growth += g;
     out.ibi += p.ibi * deflatorAt(year);

@@ -36,7 +36,14 @@ import { InvestmentsEditor } from './investments-editor';
 import { RealEstateEditor } from './real-estate-editor';
 import { milestoneUses, TimingInput } from './timing-input';
 
-export type EditorSection = 'all' | 'household' | 'milestones' | 'expenses' | 'investments' | 'realEstate';
+export type EditorSection =
+  | 'all'
+  | 'household'
+  | 'milestones'
+  | 'expenses'
+  | 'investments'
+  | 'realEstate'
+  | 'monteCarlo';
 
 const TITLES: Record<EditorSection, string> = {
   all: 'Edit plan',
@@ -45,6 +52,7 @@ const TITLES: Record<EditorSection, string> = {
   expenses: 'Household expenses',
   investments: 'Returns, flows and withdrawals',
   realEstate: 'Real estate: sales and purchases',
+  monteCarlo: 'Monte Carlo',
 };
 
 interface Props {
@@ -149,6 +157,7 @@ function PlanForm({
     show('expenses') && <ExpensesSection key="expenses" draft={draft} set={set} titled={section === 'all'} />,
     show('investments') && <InvestmentsEditor key="investments" draft={draft} set={set} accounts={accounts} />,
     show('realEstate') && <RealEstateEditor key="realEstate" draft={draft} set={set} properties={properties} />,
+    show('monteCarlo') && <MonteCarloSection key="monteCarlo" draft={draft} set={set} titled={section === 'all'} />,
   ].filter(Boolean);
 
   return (
@@ -610,6 +619,47 @@ function SpendingRuleEditor({ draft, set }: SectionProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const EQUITY_FIELDS: [keyof Plan['equityShare'], string][] = [
+  ['fund', 'Fondos'],
+  ['brokerage', 'Brokerage'],
+  ['pension', 'Pension plans'],
+];
+
+function MonteCarloSection({ draft, set, titled }: SectionProps) {
+  return (
+    <div className="space-y-3">
+      {titled && <h3 className="font-medium">Monte Carlo</h3>}
+      <p className="text-muted-foreground text-xs">
+        Stocks share of each account type, the rest is bonds: random years move its returns around the
+        expected ones. The deterministic plan does not use it.
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        {EQUITY_FIELDS.map(([k, label]) => (
+          <Field key={k} label={`${label}: stocks, %`}>
+            <PercentInput
+              value={draft.equityShare[k]}
+              onChange={(v) => set({ equityShare: { ...draft.equityShare, [k]: v } })}
+            />
+          </Field>
+        ))}
+        <Field label="Trials">
+          <NumberInput
+            value={draft.monteCarlo.trials}
+            step={100}
+            onChange={(v) => set({ monteCarlo: { ...draft.monteCarlo, trials: v ?? 0 } })}
+          />
+        </Field>
+        <Field label="Seed">
+          <NumberInput
+            value={draft.monteCarlo.seed}
+            onChange={(v) => set({ monteCarlo: { ...draft.monteCarlo, seed: v ?? 0 } })}
+          />
+        </Field>
+      </div>
     </div>
   );
 }

@@ -1,9 +1,11 @@
-// Deterministic yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
+// Yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
 // milestones → account income and growth → autónomo income and RETA, public pensions → real
 // estate and loans → expenses (a spending rule sets the discretionary ones) → IRPF → surplus
 // through flows,
 // or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
-// Amounts are nominal; deflator converts them to euros of the plan's first year.
+// Amounts are nominal; deflator converts them to euros of the plan's first year. Returns and
+// inflation come from the market path: constant for the deterministic plan, one per trial in Monte
+// Carlo.
 import {
   actividad,
   indexRules,
@@ -23,6 +25,7 @@ import {
 } from '../es-tax';
 import { isPension, type Owner } from '../model/accounts';
 import type { Filing, Plan, SpendingRule } from '../model/plan';
+import { constantPath, priceLevelAt, priceLevels, type MarketYear } from './market';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
 import {
   loansBalance,
@@ -199,13 +202,25 @@ function useRoom(kind: 'ppi' | 'ppes', r: PensionRoom, c: number): void {
   r.tope -= c;
 }
 
-/** Runs the plan year by year. filing defaults to the plan's; the other one is for comparing returns. */
-export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.filing): PlanResult {
+/**
+ * Runs the plan year by year. filing defaults to the plan's; the other one is for comparing returns.
+ * market — returns and inflation of every plan year; defaults to the plan's expected ones.
+ */
+export function runPlan(
+  plan: Plan,
+  start: StartingPoint,
+  filing: Filing = plan.filing,
+  market?: MarketYear[],
+): PlanResult {
   if (filing === 'joint' && plan.people.length !== 2) {
     throw new Error('Joint filing needs two people');
   }
   const n = plan.people.length;
-  const r = plan.returns;
+  const years = endYear(plan) - plan.startYear + 1;
+  const path = market ?? constantPath(plan, years);
+  if (path.length < years) throw new Error(`Market path has ${path.length} years, the plan ${years}`);
+  const levels = priceLevels(path);
+  const level = (y: number) => priceLevelAt(levels, plan.inflation, y - plan.startYear);
   const rows: LedgerRow[] = [];
   let carries: Carry[] = plan.people.map(() => ({}));
   let jointCarry: Carry = {};
@@ -228,8 +243,9 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
 
   for (let year = plan.startYear; year <= endYear(plan); year++) {
     const t = year - plan.startYear;
-    const rules = planRules(plan, year);
-    const deflator = (1 + plan.inflation) ** t;
+    const m = path[t];
+    const rules = planRules(plan, year, level);
+    const deflator = levels[t];
     const ages = plan.people.map((p) => year - p.birthYear);
     const prev = rows.at(-1);
     const reachedNow = reachMilestones(plan, year, prev ? prev.netWorth / prev.deflator : start.netWorth, reached);
@@ -238,7 +254,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     const rule = plan.spending;
     const ruleWithdrawal: number | null =
       rule.kind !== 'planned' && isActive(rule.start, null, year, plan, reached)
-        ? spendingRuleWithdrawal(rule, portfolio, lastRuleWithdrawal, plan.inflation)
+        ? spendingRuleWithdrawal(rule, portfolio, lastRuleWithdrawal, m.inflation)
         : null;
     lastRuleWithdrawal = ruleWithdrawal;
 
@@ -249,28 +265,29 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     for (const a of accounts) {
       const value = accountValue(a);
       let income = 0;
-      if (a.kind === 'cash') income = Math.max(a.cash, 0) * r.cashInterest;
+      if (a.kind === 'cash') income = Math.max(a.cash, 0) * m.cashInterest;
       else if (a.kind === 'brokerage') {
-        income = (value - a.cash) * r.brokerageYield;
-        grow(a, r.brokerageGrowth);
-      } else grow(a, a.kind === 'fund' ? r.fundGrowth : r.pensionGrowth);
+        income = (value - a.cash) * m.brokerageYield;
+        grow(a, m.brokerageGrowth);
+      } else grow(a, a.kind === 'fund' ? m.fundGrowth : m.pensionGrowth);
       marketGrowth += accountValue(a) - value;
       investmentIncome += income;
       ownerShares(a.owner, n).forEach((s, i) => (base[i].rcm += income * s));
     }
 
-    // Autónomo income and RETA; public pensions are rendimientos del trabajo.
+    // Autónomo income and RETA; public pensions are rendimientos del trabajo. Income keeps its real
+    // growth over the plan's inflation whatever the year's inflation is.
     const acts = plan.people.map((p) => {
       const inc = p.autonomo;
       if (!inc || !isActive(inc.start, inc.end, year, plan, reached)) return null;
-      const g = (1 + inc.growth) ** t;
+      const g = deflator * ((1 + inc.growth) / (1 + plan.inflation)) ** t;
       return actividad(inc.revenue * g, inc.expenses * g, rules);
     });
     const pensions = plan.people.map((p) =>
       p.pension && isActive(p.pension.start, null, year, plan, reached) ? p.pension.amount * deflator : 0,
     );
     pensions.forEach((v, i) => (base[i].trabajo += v));
-    const re = realEstateYear(plan, year, rules, properties, loans, reached, ages);
+    const re = realEstateYear(plan, year, rules, properties, loans, reached, ages, m, level);
     re.imputedRent.forEach((v, i) => (base[i].otras += v));
     re.gains.forEach((g, i) => (base[i].ganancias += g));
     const personas: Persona[] = plan.people.map((p, i) => ({
@@ -374,11 +391,17 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       deposits.cash += budget;
     } else {
       // Deficit → withdrawals in order. Sales and pension payouts add tax, so the amount to
-      // withdraw is the fixed point x = tax(x) − cf0; iterations converge monotonically from below.
+      // withdraw is the fixed point x = tax(x) − cf0. Plain steps x → tax(x) − cf0 converge
+      // monotonically from below, at the rate of the marginal tax. The tax is piecewise linear in
+      // x, so the secant through the last two points usually lands on the fixed point at once; a
+      // secant step that goes past it is replaced by the plain step.
       let x = taxed.irpf - cf0;
       let trial = accounts;
       let raised = 0;
       let need = x;
+      /** The last point below the fixed point and how far below it was */
+      let below: { x: number; gap: number } | null = null;
+      let secant = false;
       for (let iter = 0; iter < 100; iter++) {
         trial = accounts.map(cloneAccount);
         const d = drawdown(plan, withdrawalOrder(plan, trial), x, ages);
@@ -388,8 +411,17 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
         realizedGains = d.ganancias.reduce((s, g) => s + g, 0);
         pensionWithdrawals = d.trabajo.reduce((s, g) => s + g, 0);
         need = taxed.irpf - cf0;
+        if (secant && need - raised < -1e-7) {
+          x = below!.x + below!.gap;
+          secant = false;
+          continue;
+        }
         if (raised < x - 1e-9 || need - raised < 1e-7) break;
-        x = need;
+        const gap = need - x;
+        secant = below !== null && below.gap - gap > 1e-9;
+        const next = secant ? x + (gap * (x - below!.x)) / (below!.gap - gap) : need;
+        below = { x, gap };
+        x = next;
       }
       accounts = trial;
       if (need - raised > 1e-6) {
@@ -446,11 +478,14 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
   return { filing, rows, milestoneYears: Object.fromEntries(reached) };
 }
 
-/** Tax rules for the year under the plan's policy for years after the last known rules. */
-function planRules(plan: Plan, year: number): IrpfRules {
+/**
+ * Tax rules for the year under the plan's policy for years after the last known rules.
+ * level — price level of a calendar year.
+ */
+function planRules(plan: Plan, year: number, level: (year: number) => number): IrpfRules {
   const known = rulesForYear(year);
   if (plan.taxRules === 'frozen' || year <= known.year) return known;
-  return indexRules(known, (1 + plan.inflation) ** (year - known.year));
+  return indexRules(known, level(year) / level(known.year));
 }
 
 /**

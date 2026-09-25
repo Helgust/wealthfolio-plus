@@ -1,5 +1,4 @@
 // Plan page in the ProjectionLab layout: net worth chart, key metrics, tabs.
-// Monte Carlo is a stub.
 import { useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -23,6 +22,7 @@ import { useMemo, useState } from 'react';
 import { AccountsTab } from '../components/accounts-tab';
 import { CashflowTab } from '../components/cashflow-tab';
 import { LedgerTable } from '../components/ledger-table';
+import { MonteCarloTab } from '../components/monte-carlo-tab';
 import { NetWorthChart } from '../components/net-worth-chart';
 import { PageMessage } from '../components/page-message';
 import { PlanEditor, type EditorSection } from '../components/plan-editor';
@@ -33,6 +33,7 @@ import { TaxesTab } from '../components/taxes-tab';
 import { YearPanel } from '../components/year-panel';
 import { runPlan, type PlanResult } from '../engine/run-plan';
 import { availableYears } from '../es-tax';
+import { useMonteCarloStore } from '../hooks/use-monte-carlo';
 import { REAL_ESTATE_KEY, SETTINGS_KEY, usePlannerData } from '../hooks/use-planner-data';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 import { saveAccountSettings, type AccountSettings } from '../model/accounts';
@@ -60,14 +61,6 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
   );
 }
 
-function Stub({ children }: { children: string }) {
-  return (
-    <Card>
-      <CardContent className="text-muted-foreground py-10 text-center text-sm">{children}</CardContent>
-    </Card>
-  );
-}
-
 export function PlanPage({ ctx }: { ctx: AddonContext }) {
   const queryClient = useQueryClient();
   const { portfolio, settings, realEstate, book, start, error, changePlans } = usePlannerData(ctx);
@@ -84,6 +77,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     if (!plan || !start || plan.people.length !== 2) return null;
     return runPlan(plan, start, plan.filing === 'joint' ? 'individual' : 'joint');
   }, [plan, start]);
+  const monteCarlo = useMonteCarloStore(plan, start);
 
   async function save(next: Plan) {
     await changePlans((b) => savePlan(ctx.api.storage, b, active!.id, next));
@@ -239,7 +233,15 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <TaxesTab result={result} alternative={alternative} currency={currency} mode={mode} />
           </TabsContent>
           <TabsContent value="montecarlo">
-            <Stub>Monte Carlo and historical backtesting come in phase 4.</Stub>
+            <MonteCarloTab
+              plan={plan}
+              start={start}
+              rows={rows}
+              store={monteCarlo}
+              currency={currency}
+              mode={mode}
+              onSettings={() => setEditing('monteCarlo')}
+            />
           </TabsContent>
           <TabsContent value="table">
             <LedgerTable rows={rows} currency={currency} mode={mode} />

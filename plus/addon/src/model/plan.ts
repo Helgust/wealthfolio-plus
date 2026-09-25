@@ -1,5 +1,6 @@
 // Plan model: household, autónomo income, expenses; since phase 2 — account returns, surplus
-// flows and withdrawal order; since phase 3 — milestones, event timing, public pension. The Zod
+// flows and withdrawal order; since phase 3 — milestones, event timing, public pension; since
+// phase 4 — equity shares and Monte Carlo settings. The Zod
 // schema validates the plan read from storage: old or broken JSON must not silently turn into
 // zeros. New fields have defaults and old ones are upgraded (upgradeLegacy), so plans of earlier
 // phases load without migration.
@@ -43,7 +44,10 @@ export const AutonomoIncomeSchema = z.object({
   revenue: money,
   /** Deductible business expenses excluding the RETA cuota, € per year */
   expenses: money,
-  /** Nominal growth of revenue and expenses per year, from the plan's first year */
+  /**
+   * Nominal growth of revenue and expenses per year, from the plan's first year, at the plan's
+   * inflation; in years with other inflation (Monte Carlo) they keep the same real growth
+   */
   growth: rate,
   /** null — from the plan's first year */
   start: TimingSchema.nullable(),
@@ -124,6 +128,22 @@ export const ReturnsSchema = z.object({
   propertyGrowth: rate.default(0.02),
 });
 
+/**
+ * Share of stocks by account type, the rest is bonds: how random and historical years move the
+ * type's returns. The deterministic plan does not use it.
+ */
+export const EquityShareSchema = z.object({
+  fund: share,
+  brokerage: share,
+  pension: share,
+});
+
+/** Monte Carlo run: number of trials and the seed that makes it reproducible. */
+export const MonteCarloSchema = z.object({
+  trials: z.number().int().min(100).max(10_000),
+  seed: z.number().int().min(0).max(2 ** 32 - 1),
+});
+
 /** Sale of a property from Wealthfolio: at its projected value, less selling costs. */
 export const PropertySaleSchema = z.object({
   propertyId: z.string().min(1),
@@ -168,6 +188,10 @@ export const FlowSchema = z.object({
   mode: z.enum(['max', 'fixed', 'percent', 'untilBalance']),
   amount: money,
 });
+
+/** Template values: the user sets their own allocation. */
+export const DEFAULT_EQUITY_SHARE: EquityShare = { fund: 1, brokerage: 1, pension: 0.5 };
+export const DEFAULT_MONTE_CARLO: MonteCarlo = { trials: 1000, seed: 1 };
 
 export const DEFAULT_RETURNS: Returns = {
   cashInterest: 0.015,
@@ -222,6 +246,8 @@ const PlanObject = z
     children: z.array(ChildSchema).max(10),
     expenses: z.array(ExpenseSchema).max(50),
     returns: ReturnsSchema.default(DEFAULT_RETURNS),
+    equityShare: EquityShareSchema.default(DEFAULT_EQUITY_SHARE),
+    monteCarlo: MonteCarloSchema.default(DEFAULT_MONTE_CARLO),
     flows: z.array(FlowSchema).max(30).default([]),
     /** Wealthfolio account ids; empty — cash → fondos → brokerage → pension plans */
     withdrawalOrder: z.array(z.string().min(1)).max(50).default([]),
@@ -255,6 +281,8 @@ export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
 export type Expense = z.infer<typeof ExpenseSchema>;
 export type Returns = z.infer<typeof ReturnsSchema>;
+export type EquityShare = z.infer<typeof EquityShareSchema>;
+export type MonteCarlo = z.infer<typeof MonteCarloSchema>;
 export type Flow = z.infer<typeof FlowSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type Filing = Plan['filing'];
@@ -294,6 +322,8 @@ export function defaultPlan(startYear: number): Plan {
       },
     ],
     returns: DEFAULT_RETURNS,
+    equityShare: DEFAULT_EQUITY_SHARE,
+    monteCarlo: DEFAULT_MONTE_CARLO,
     flows: [],
     withdrawalOrder: [],
     pensionAccessAge: 65,
