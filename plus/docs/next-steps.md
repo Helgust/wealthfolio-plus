@@ -57,6 +57,26 @@
 
 ## Окружение — ловушки
 
+Форк и аддон (фаза 0):
+
+- **pnpm — только standalone `pnpm.exe`** (`winget install pnpm.pnpm --version 10.33.4`). Скрипты upstream
+  (`apps/frontend/scripts/dev-addon-sandbox.mjs`) и dev-server из `@wealthfolio/addon-dev-tools` делают
+  `spawn("pnpm")` без shell; `pnpm.cmd` из npm Node 24 так не запускает (`spawn pnpm ENOENT`).
+  `WinGet\Links` в PATH стоит раньше `AppData\Roaming\npm`.
+- `~/.cargo/bin` может не быть в PATH Bash-инструмента: `export PATH="$HOME/.cargo/bin:$PATH"`.
+- Запуск форка: `VITE_ENABLE_ADDON_DEV_MODE=true pnpm tauri dev --config plus/tauri.dev.conf.json`;
+  аддон: `pnpm dev:server` в `plus/addon`. `tauri dev` перезаписывает окончания строк в
+  `apps/tauri/Cargo.toml` — в коммит не брать.
+- `plus/addon` — отдельный pnpm-workspace (свой `pnpm-workspace.yaml`): `.npmrc` с `ignore-workspace`
+  pnpm 10 игнорирует и ставит корневой workspace.
+- Шаблон аддона 3.8.0 задавал `build.watch` в `vite.config.ts`, из-за чего `pnpm build` не завершался;
+  убрано.
+- API аддона в песочнице — Proxy: у него есть любое свойство. Наличие метода проверять только вызовом
+  (неизвестный метод хост отклоняет).
+- Node 24 запускает `.ts` напрямую: `node --input-type=module -e "await import('./src/x.ts')"`.
+
+Python-эталон:
+
 - **`uv` не установлен.** `.venv` создан через `python -m venv`. Команды:
   `.venv\Scripts\python -m pytest`, `.venv\Scripts\python -m ruff check .`,
   `.venv\Scripts\python -m planner.app`. После `winget install astral-sh.uv` заработает `uv sync`.
