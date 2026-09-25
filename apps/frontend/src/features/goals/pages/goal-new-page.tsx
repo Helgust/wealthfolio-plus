@@ -25,7 +25,6 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useCreateGoalFlow } from "../hooks/use-create-goal-flow";
 import { useGoals } from "../hooks/use-goals";
-import { toast } from "sonner";
 import {
   DEFAULT_RETIREMENT_PLAN,
   ageFromBirthYearMonth,
@@ -154,8 +153,9 @@ export default function GoalNewPage() {
   };
 
   const handleSelectType = (type: GoalType) => {
-    if (type === "retirement" && retirementExists) {
-      toast.error(t("goals:new.retirement_exists_error"));
+    // Fork: retirement planning lives in the Planificador ES addon.
+    if (type === "retirement") {
+      navigate("/addons/planificador-es");
       return;
     }
     const nextTemplate = goalTemplates.find((tmpl) => tmpl.type === type);
