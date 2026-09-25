@@ -42,6 +42,12 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       external: hostProvidedDependencies,
+      onwarn(warning, warn) {
+        // zod 4 ставит @__PURE__ в комментариях, которые Rollup не понимает и просто выбрасывает.
+        // На бандл это не влияет, а dev-сервер аддона печатает такие предупреждения как «Vite error».
+        if (warning.code === "INVALID_ANNOTATION" && warning.id?.includes("node_modules")) return;
+        warn(warning);
+      },
     },
     // Без `build.watch`: в шаблоне 3.8.0 он превращал `pnpm build` в бесконечный watch.
     // Watch-режим нужен только dev-серверу — он запускает `pnpm dev` (`vite build --watch`).
