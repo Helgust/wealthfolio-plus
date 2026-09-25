@@ -812,6 +812,34 @@ export interface IncomeByAsset {
   income: number;
 }
 
+/**
+ * Alternative asset or liability (property, vehicle, collectible, precious metal,
+ * liability, other) with its latest valuation. Not tied to an account.
+ */
+export interface AlternativeAssetHolding {
+  /** Asset ID (e.g., "PROP-a1b2c3d4") */
+  id: string;
+  /** Asset kind (property, vehicle, collectible, precious, liability, other) */
+  kind: string;
+  name: string;
+  /** Display type label, e.g., "Property", "Vehicle" */
+  symbol: string;
+  currency: string;
+  /** Current market value from latest quote (decimal string) */
+  marketValue: string;
+  purchasePrice?: string;
+  purchaseDate?: string;
+  unrealizedGain?: string;
+  unrealizedGainPct?: string;
+  /** Date of the latest valuation (ISO format) */
+  valuationDate: string;
+  /** Kind-specific metadata */
+  metadata?: Record<string, unknown>;
+  /** For liabilities: linked asset ID if any */
+  linkedAssetId?: string;
+  notes?: string | null;
+}
+
 export interface IncomeSummary {
   period: string;
   byMonth: Record<string, number>;

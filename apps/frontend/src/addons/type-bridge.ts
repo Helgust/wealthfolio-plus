@@ -7,6 +7,7 @@ import type { EventCallback, UnlistenFn } from "@/adapters";
 import type {
   Account,
   AccountValuation,
+  AlternativeAssetHolding,
   Activity,
   ActivityBulkMutationRequest,
   ActivityBulkMutationResult,
@@ -166,6 +167,7 @@ export interface InternalHostAPI {
     endDate?: string,
   ): Promise<AccountValuation[]>;
   getLatestValuations(accountIds: string[]): Promise<AccountValuation[]>;
+  getAlternativeHoldings(): Promise<AlternativeAssetHolding[]>;
   calculatePerformanceHistory(
     itemType: "account" | "symbol",
     itemId: string,
@@ -465,6 +467,7 @@ export function createSDKHostAPIBridge(
       getIncomeSummary: internalAPI.getIncomeSummary,
       getHistoricalValuations: internalAPI.getHistoricalValuations,
       getLatestValuations: internalAPI.getLatestValuations,
+      getAlternativeHoldings: internalAPI.getAlternativeHoldings,
     },
     "portfolio",
     guard,

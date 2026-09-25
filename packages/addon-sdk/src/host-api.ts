@@ -15,6 +15,7 @@ import type {
   ActivitySearchResponse,
   ActivityUpdate,
   AccountValuation,
+  AlternativeAssetHolding,
   CheckSnapshotImportResult,
   ImportActivitiesResult,
   Asset,
@@ -131,6 +132,14 @@ export interface PortfolioAPI {
    * @returns Promise resolving to array of latest account valuations
    */
   getLatestValuations(accountIds: string[]): Promise<AccountValuation[]>;
+
+  /**
+   * Get alternative assets and liabilities (property, vehicles, loans, …)
+   * with their latest valuations. They are not tied to accounts, so
+   * `getHoldings(accountId)` does not return them.
+   * @returns Promise resolving to array of alternative asset holdings
+   */
+  getAlternativeHoldings(): Promise<AlternativeAssetHolding[]>;
 }
 
 /**

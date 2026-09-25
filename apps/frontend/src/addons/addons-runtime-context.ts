@@ -65,6 +65,7 @@ import {
   getHoldings,
   getIncomeSummary,
   getLatestValuations,
+  getAlternativeHoldings,
   recalculatePortfolio,
   updatePortfolio,
   getSnapshots,
@@ -496,6 +497,7 @@ export function createAddonHostAPI(
       updatePortfolio,
       recalculatePortfolio,
       getIncomeSummary: () => getIncomeSummary(undefined),
+      getAlternativeHoldings,
       getHistoricalValuations: (accountId?: string, startDate?: string, endDate?: string) =>
         getHistoricalValuations(
           accountId ? { type: "account", accountId } : { type: "all" },

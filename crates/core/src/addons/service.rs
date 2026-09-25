@@ -227,6 +227,7 @@ pub fn detect_addon_permissions(addon_files: &[AddonFile]) -> Vec<AddonPermissio
                 "getIncomeSummary",
                 "getHistoricalValuations",
                 "getLatestValuations",
+                "getAlternativeHoldings",
             ],
             "Access to portfolio holdings, valuations, and performance",
         ),
