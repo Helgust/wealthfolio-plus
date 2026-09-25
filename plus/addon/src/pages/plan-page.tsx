@@ -1,5 +1,5 @@
 // Plan page in the ProjectionLab layout: net worth chart, key metrics, tabs.
-// Cash flow and Monte Carlo are stubs.
+// Monte Carlo is a stub.
 import { useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -21,6 +21,7 @@ import {
 import { Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccountsTab } from '../components/accounts-tab';
+import { CashflowTab } from '../components/cashflow-tab';
 import { LedgerTable } from '../components/ledger-table';
 import { NetWorthChart } from '../components/net-worth-chart';
 import { PageMessage } from '../components/page-message';
@@ -217,7 +218,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <PlanTab plan={plan} result={result} accounts={start.accounts} currency={currency} onEdit={setEditing} />
           </TabsContent>
           <TabsContent value="cashflow">
-            <Stub>Cash-flow Sankey comes in phase 3.</Stub>
+            <CashflowTab rows={rows} currency={currency} mode={mode} />
           </TabsContent>
           <TabsContent value="taxes">
             <TaxesTab result={result} alternative={alternative} currency={currency} mode={mode} />

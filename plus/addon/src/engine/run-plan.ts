@@ -50,6 +50,10 @@ export interface Balances {
   pension: number;
 }
 
+const emptyBalances = (): Balances => ({ cash: 0, fund: 0, brokerage: 0, pension: 0 });
+const balanceKey = (kind: Account['kind']): keyof Balances => (isPension(kind) ? 'pension' : kind);
+export const totalOf = (b: Balances) => b.cash + b.fund + b.brokerage + b.pension;
+
 export interface LedgerRow {
   year: number;
   people: PersonYear[];
@@ -74,6 +78,14 @@ export interface LedgerRow {
   pensionWithdrawals: number;
   /** Income − expenses − taxes, before flows and withdrawals */
   netCashFlow: number;
+  /** Money put into accounts by type: surplus flows and the rest to cash (pension = contributions) */
+  deposits: Balances;
+  /** Money taken out of accounts by type to cover a deficit (pension = payouts, gross) */
+  withdrawals: Balances;
+  /** Deficit left when the accounts in the withdrawal order run out: cash goes negative */
+  shortfall: number;
+  /** Price growth of positions; interest and dividends are paid out as investmentIncome instead */
+  marketGrowth: number;
   balances: Balances;
   /** Sum of CASH accounts; < 0 — money ran out, the deficit is debt */
   cash: number;
@@ -195,13 +207,16 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     // Account income — on start-of-year value, then price growth.
     const base = plan.people.map(emptyRentas);
     let investmentIncome = 0;
+    let marketGrowth = 0;
     for (const a of accounts) {
+      const value = accountValue(a);
       let income = 0;
       if (a.kind === 'cash') income = Math.max(a.cash, 0) * r.cashInterest;
       else if (a.kind === 'brokerage') {
-        income = (accountValue(a) - a.cash) * r.brokerageYield;
+        income = (value - a.cash) * r.brokerageYield;
         grow(a, r.brokerageGrowth);
       } else grow(a, a.kind === 'fund' ? r.fundGrowth : r.pensionGrowth);
+      marketGrowth += accountValue(a) - value;
       investmentIncome += income;
       ownerShares(a.owner, n).forEach((s, i) => (base[i].rcm += income * s));
     }
@@ -255,6 +270,9 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     let realizedGains = 0;
     let pensionContributions = 0;
     let pensionWithdrawals = 0;
+    const deposits = emptyBalances();
+    let withdrawals = emptyBalances();
+    let shortfall = 0;
 
     if (cf0 - taxed.irpf >= 0) {
       // Surplus → flows in order; the rest and the tax saving from contributions → cash.
@@ -286,6 +304,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
         }
         const c = Math.min(want, budget);
         deposit(a, c, `${year}-12-31`);
+        deposits[balanceKey(a.kind)] += c;
         budget -= c;
       }
       if (pensionContributions > 0) {
@@ -294,6 +313,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
         taxed = after;
       }
       sink().cash += budget;
+      deposits.cash += budget;
     } else {
       // Deficit → withdrawals in order. Sales and pension payouts add tax, so the amount to
       // withdraw is the fixed point x = tax(x) − cf0; iterations converge monotonically from below.
@@ -312,6 +332,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
           })),
         );
         raised = d.raised;
+        withdrawals = d.byKind;
         realizedGains = d.ganancias.reduce((s, g) => s + g, 0);
         pensionWithdrawals = d.trabajo.reduce((s, g) => s + g, 0);
         need = taxed.irpf - cf0;
@@ -319,14 +340,21 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
         x = need;
       }
       accounts = trial;
-      // Accounts ran out: the shortfall makes cash negative.
-      if (need - raised > 1e-6) sink().cash -= need - raised;
+      if (need - raised > 1e-6) {
+        // Accounts ran out: the shortfall makes cash negative.
+        shortfall = need - raised;
+        sink().cash -= shortfall;
+      } else if (raised > need) {
+        // A sale at a loss lowered the tax: what was raised beyond the need stays in cash.
+        sink().cash += raised - need;
+        deposits.cash += raised - need;
+      }
     }
     carries = taxed.carries;
     jointCarry = taxed.jointCarry;
 
-    const balances: Balances = { cash: 0, fund: 0, brokerage: 0, pension: 0 };
-    for (const a of accounts) balances[isPension(a.kind) ? 'pension' : a.kind] += accountValue(a);
+    const balances = emptyBalances();
+    for (const a of accounts) balances[balanceKey(a.kind)] += accountValue(a);
     const d = taxed.declaraciones;
     rows.push({
       year,
@@ -347,10 +375,14 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       pensionContributions,
       pensionWithdrawals,
       netCashFlow: cf0 - taxed.irpf,
+      deposits,
+      withdrawals,
+      shortfall,
+      marketGrowth,
       balances,
       cash: balances.cash,
       otherAssets,
-      netWorth: balances.cash + balances.fund + balances.brokerage + balances.pension + otherAssets,
+      netWorth: totalOf(balances) + otherAssets,
       deflator,
       milestones: reachedNow.map((m) => m.id),
     });
@@ -360,6 +392,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
 
 interface Drawdown {
   raised: number;
+  byKind: Balances;
   ganancias: number[];
   trabajo: number[];
 }
@@ -367,7 +400,12 @@ interface Drawdown {
 /** Takes amount out of accounts in order; gains and pension payouts per person. */
 function drawdown(plan: Plan, order: Account[], amount: number, ages: number[]): Drawdown {
   const n = plan.people.length;
-  const out: Drawdown = { raised: 0, ganancias: new Array(n).fill(0), trabajo: new Array(n).fill(0) };
+  const out: Drawdown = {
+    raised: 0,
+    byKind: emptyBalances(),
+    ganancias: new Array(n).fill(0),
+    trabajo: new Array(n).fill(0),
+  };
   for (const a of order) {
     const left = amount - out.raised;
     if (left <= 0) break;
@@ -377,10 +415,12 @@ function drawdown(plan: Plan, order: Account[], amount: number, ages: number[]):
       const s = withdraw(a, left);
       out.trabajo[i] += s.proceeds;
       out.raised += s.proceeds;
+      out.byKind.pension += s.proceeds;
       continue;
     }
     const s = withdraw(a, left);
     out.raised += s.proceeds;
+    out.byKind[balanceKey(a.kind)] += s.proceeds;
     if (a.kind !== 'cash') {
       ownerShares(a.owner, n).forEach((sh, i) => (out.ganancias[i] += (s.proceeds - s.cost) * sh));
     }
