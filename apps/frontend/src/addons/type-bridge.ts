@@ -8,6 +8,7 @@ import type {
   Account,
   AccountValuation,
   AlternativeAssetHolding,
+  NetWorthResponse,
   Activity,
   ActivityBulkMutationRequest,
   ActivityBulkMutationResult,
@@ -168,6 +169,7 @@ export interface InternalHostAPI {
   ): Promise<AccountValuation[]>;
   getLatestValuations(accountIds: string[]): Promise<AccountValuation[]>;
   getAlternativeHoldings(): Promise<AlternativeAssetHolding[]>;
+  getNetWorth(date?: string): Promise<NetWorthResponse>;
   calculatePerformanceHistory(
     itemType: "account" | "symbol",
     itemId: string,
@@ -468,6 +470,7 @@ export function createSDKHostAPIBridge(
       getHistoricalValuations: internalAPI.getHistoricalValuations,
       getLatestValuations: internalAPI.getLatestValuations,
       getAlternativeHoldings: internalAPI.getAlternativeHoldings,
+      getNetWorth: internalAPI.getNetWorth,
     },
     "portfolio",
     guard,

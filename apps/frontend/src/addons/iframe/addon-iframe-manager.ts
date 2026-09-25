@@ -325,6 +325,7 @@ export const ALLOWED_API_METHODS = new Set([
   "portfolio.getHistoricalValuations",
   "portfolio.getLatestValuations",
   "portfolio.getAlternativeHoldings",
+  "portfolio.getNetWorth",
   "activities.getAll",
   "activities.search",
   "activities.create",

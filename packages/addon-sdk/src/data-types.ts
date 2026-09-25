@@ -840,6 +840,20 @@ export interface AlternativeAssetHolding {
   notes?: string | null;
 }
 
+/**
+ * Net worth as of a date, as shown on the Net Worth page: account valuations plus
+ * alternative assets minus liabilities, in base currency. Amounts are decimal strings.
+ */
+export interface NetWorth {
+  /** As-of date (ISO format) */
+  date: string;
+  assets: { total: string };
+  /** Positive magnitude, subtracted for net worth */
+  liabilities: { total: string };
+  netWorth: string;
+  currency: string;
+}
+
 export interface IncomeSummary {
   period: string;
   byMonth: Record<string, number>;

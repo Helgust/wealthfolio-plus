@@ -16,6 +16,7 @@ import type {
   ActivityUpdate,
   AccountValuation,
   AlternativeAssetHolding,
+  NetWorth,
   CheckSnapshotImportResult,
   ImportActivitiesResult,
   Asset,
@@ -140,6 +141,14 @@ export interface PortfolioAPI {
    * @returns Promise resolving to array of alternative asset holdings
    */
   getAlternativeHoldings(): Promise<AlternativeAssetHolding[]>;
+
+  /**
+   * Get net worth (assets minus liabilities) in base currency, as on the
+   * Net Worth page.
+   * @param date - As-of date (YYYY-MM-DD); defaults to today
+   * @returns Promise resolving to net worth totals
+   */
+  getNetWorth(date?: string): Promise<NetWorth>;
 }
 
 /**

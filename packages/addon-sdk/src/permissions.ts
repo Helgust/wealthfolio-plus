@@ -73,6 +73,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       'getHistoricalValuations',
       'getLatestValuations',
       'getAlternativeHoldings',
+      'getNetWorth',
     ],
     riskLevel: 'high',
   },
