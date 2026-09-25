@@ -25,6 +25,9 @@ from planner.tax import (
     RentasMiembro,
     actividad,
     available_years,
+    ganancia_exenta_vivienda,
+    impuesto_compra_vivienda,
+    imputacion_renta,
     irpf_anual,
     irpf_conjunta,
     load_irpf_rules,
@@ -270,6 +273,41 @@ def _indexed_cases(year: int, rules) -> list[dict]:
     ]
 
 
+def _inmuebles_cases(year: int, rules) -> list[dict]:
+    """Real estate: imputación de rentas, vivienda habitual exemption, taxes on buying a home."""
+    r = rules.inmuebles
+    imputacion = [
+        {
+            "input": {
+                "valor_catastral": vc,
+                "revisado": rev,
+                "precio_adquisicion": 150_000.0,
+                "dias": d,
+            },
+            "expected": imputacion_renta(vc, r, revisado=rev, precio_adquisicion=150_000.0, dias=d),
+        }
+        for vc, rev, d in product((None, 80_000.0), (False, True), (365, 100))
+    ]
+    exenta = [
+        {"input": args, "expected": ganancia_exenta_vivienda(*args, r)}
+        for args in product(
+            (-5_000.0, 60_000.0),  # ganancia
+            (300_000.0,),  # valor de transmisión
+            (0.0, 120_000.0),  # loan principal still owed
+            (0.0, 90_000.0, 400_000.0),  # reinvested
+            (50, 65),  # age
+        )
+    ]
+    compra = [
+        {
+            "input": {"precio": p, "nueva": n, "habitual": h},
+            "expected": impuesto_compra_vivienda(p, nueva=n, habitual=h, rules=r),
+        }
+        for p, n, h in product((200_000.0, 1_500_000.0), (False, True), (False, True))
+    ]
+    return [{"year": year, "imputacion": imputacion, "exenta": exenta, "compra": compra}]
+
+
 def fixtures() -> dict:
     out: dict[str, list] = {
         "actividad": [],
@@ -277,6 +315,7 @@ def fixtures() -> dict:
         "irpf_cadena": [],
         "irpf_conjunta": [],
         "rules_indexed": [],
+        "inmuebles": [],
     }
     for year in available_years():
         rules = load_irpf_rules(year)
@@ -285,6 +324,7 @@ def fixtures() -> dict:
         out["irpf_cadena"] += _cadena_cases(year, rules)
         out["irpf_conjunta"] += _conjunta_cases(year, rules)
         out["rules_indexed"] += _indexed_cases(year, rules)
+        out["inmuebles"] += _inmuebles_cases(year, rules)
     return out
 
 

@@ -111,6 +111,16 @@ export interface Compensacion {
   anos: number;
 }
 
+/** Real estate: imputación de rentas and vivienda habitual exemptions, taxes on buying a home. */
+export interface Inmuebles {
+  imputacion: { general: number; revisado: number; sin_valor_catastral: number; base_sin_valor_catastral: number };
+  reinversion: { plazo_anos: number };
+  exencion_mayores: { edad: number };
+  itp: { general: number; alto_valor: number; alto_valor_desde: number };
+  iva_vivienda: number;
+  ajd: { vivienda_habitual: number; general: number };
+}
+
 export interface IrpfRules {
   year: number; // year the rules come from (not necessarily the tax year)
   estatal: IrpfHalf;
@@ -125,6 +135,7 @@ export interface IrpfRules {
     tributacion_conjunta: { reduccion_biparental: number };
   };
   reta: RetaRules;
+  inmuebles: Inmuebles;
 }
 
 const RULES: IrpfRules[] = [rules2025 as IrpfRules, rules2026 as IrpfRules];
@@ -219,6 +230,7 @@ export function indexRules(r: IrpfRules, f: number): IrpfRules {
         base_max: t.base_max * f,
       })),
     },
+    inmuebles: { ...r.inmuebles, itp: scaled(r.inmuebles.itp, f, 'alto_valor_desde') },
   };
 }
 

@@ -1,0 +1,38 @@
+# Real estate: imputación de rentas and the vivienda habitual exemptions in IRPF, taxes on buying a
+# home in the Comunitat Valenciana. Sources checked on 25.09.2026 against the consolidated texts:
+# LIRPF BOE-A-2006-20764, RIRPF BOE-A-2007-6820, Ley 13/1997 de la Generalitat (tributos cedidos)
+# BOE-A-1998-8202 (arts. 13 and 14 as worded by Ley 7/2023, in force 01.01.2024–31.05.2026), Ley
+# 37/1992 del IVA BOE-A-1992-28740. The IRPF articles are the same as in 2026 — see
+# rules/2026/inmuebles.yaml.
+
+# Art. 85.1 LIRPF: 2 % of the valor catastral; 1.1 % if revised in the year or the ten before;
+# without a valor catastral 1.1 % of 50 % of the acquisition price. Goes to the renta general (art. 45).
+imputacion:
+  general: 0.02
+  revisado: 0.011
+  sin_valor_catastral: 0.011
+  base_sin_valor_catastral: 0.5
+
+# Art. 38.1 LIRPF, art. 41 RIRPF: reinvestment in a new vivienda habitual within two years.
+reinversion:
+  plazo_anos: 2
+
+# Art. 33.4.b LIRPF: exemption for those over 65 selling their vivienda habitual.
+exencion_mayores:
+  edad: 65
+
+# Art. 13.Uno Ley 13/1997 de la Generalitat as worded by Ley 7/2023 (in force until 31.05.2026):
+# 10 %; 11 % when the value exceeds one million. Reduced rates of art. 13.Dos–Tres not modelled.
+itp:
+  general: 0.10
+  alto_valor: 0.11
+  alto_valor_desde: 1000000
+
+# Art. 91.Uno.1.7º Ley 37/1992: IVA of 10 % on the first delivery of homes.
+iva_vivienda: 0.10
+
+# Art. 14 Ley 13/1997 de la Generalitat (in force until 31.05.2026): Uno.a — vivienda habitual
+# 0.1 %; Cuatro — other cases 1.5 %.
+ajd:
+  vivienda_habitual: 0.001
+  general: 0.015

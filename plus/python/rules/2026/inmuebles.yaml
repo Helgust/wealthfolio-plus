@@ -1,0 +1,47 @@
+# Real estate: imputación de rentas and the vivienda habitual exemptions in IRPF, taxes on buying a
+# home in the Comunitat Valenciana. Sources checked on 25.09.2026 against the consolidated texts:
+# LIRPF BOE-A-2006-20764, RIRPF BOE-A-2007-6820, Ley 13/1997 de la Generalitat (tributos cedidos)
+# BOE-A-1998-8202 (updated 10.08.2026), Ley 37/1992 del IVA BOE-A-1992-28740.
+
+# Art. 85.1 LIRPF (as worded by Ley 26/2014): urban property that is not the vivienda habitual, not
+# rented and not used in an activity imputes a renta of 2 % of its valor catastral, pro rata by days.
+# 1.1 % where the municipality's valores catastrales were revised, modified or determined by a
+# procedimiento de valoración colectiva de carácter general in force in the year or the ten before.
+# Without a valor catastral: 1.1 % applied to 50 % of the acquisition price (or the value checked by
+# the administration, if higher). Art. 45 LIRPF: imputaciones of art. 85 go to the renta general.
+imputacion:
+  general: 0.02
+  revisado: 0.011
+  sin_valor_catastral: 0.011
+  base_sin_valor_catastral: 0.5
+
+# Art. 38.1 LIRPF and art. 41 RIRPF (as worded by RD 960/2013): the gain on selling the vivienda
+# habitual is exempt when the total amount obtained is reinvested in a new vivienda habitual within
+# two years after the sale (or paid for one bought in the two years before); partial reinvestment
+# exempts the proportional part. If the sold home was bought with a loan, the amount obtained is the
+# valor de transmisión minus the principal still owed.
+reinversion:
+  plazo_anos: 2
+
+# Art. 33.4.b LIRPF: gains on the transfer of their vivienda habitual by those over 65 are exempt.
+exencion_mayores:
+  edad: 65
+
+# Art. 13.Uno Ley 13/1997 de la Generalitat: ITP on acquisitions of real estate. 9 % as worded by
+# art. 33 Ley 5/2025 (BOE-A-2025-11959) for hechos imponibles from 1 June 2026; before, 10 % (Ley
+# 7/2023). The model applies the rate to the whole year. 11 % when the value exceeds one million.
+# Not modelled: the reduced 8 % / 6 % rates of art. 13.Dos–Tres (VPO, first home of those under 35).
+itp:
+  general: 0.09
+  alto_valor: 0.11
+  alto_valor_desde: 1000000
+
+# Art. 91.Uno.1.7º Ley 37/1992: IVA of 10 % on the first delivery of buildings fit to be homes.
+iva_vivienda: 0.10
+
+# Art. 14 Ley 13/1997 de la Generalitat: AJD on first copies of notarial deeds. Uno.a — acquisitions
+# of the vivienda habitual, 0.1 %. Cuatro — other cases, 1.4 % as worded by art. 34 Ley 5/2025 for
+# hechos imponibles from 1 June 2026 (1.5 % before); the model applies it to the whole year.
+ajd:
+  vivienda_habitual: 0.001
+  general: 0.014

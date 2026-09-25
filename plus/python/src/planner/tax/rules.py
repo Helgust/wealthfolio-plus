@@ -306,8 +306,59 @@ class Reducciones(_Frozen):
         )
 
 
+class Imputacion(_Frozen):
+    """Imputación de rentas inmobiliarias (art. 85 LIRPF): shares of the valor catastral."""
+
+    general: float
+    revisado: float  # valores catastrales revised in the year or the ten before
+    sin_valor_catastral: float
+    base_sin_valor_catastral: float  # share of the acquisition price used without a valor catastral
+
+
+class Reinversion(_Frozen):
+    """Exención por reinversión en vivienda habitual (art. 38.1 LIRPF, art. 41 RIRPF)."""
+
+    plazo_anos: int
+
+
+class ExencionMayores(_Frozen):
+    """Exemption of the vivienda habitual gain for those over edad (art. 33.4.b LIRPF)."""
+
+    edad: int
+
+
+class Itp(_Frozen):
+    """ITP on real estate in the Comunitat Valenciana (art. 13.Uno Ley 13/1997 GVA)."""
+
+    general: float
+    alto_valor: float
+    alto_valor_desde: float  # value above which alto_valor applies to the whole price
+
+
+class Ajd(_Frozen):
+    """AJD on first copies of deeds (art. 14 Ley 13/1997 GVA)."""
+
+    vivienda_habitual: float
+    general: float
+
+
+class Inmuebles(_Frozen):
+    """Real estate rules: IRPF imputación and exemptions, taxes on buying a home."""
+
+    imputacion: Imputacion
+    reinversion: Reinversion
+    exencion_mayores: ExencionMayores
+    itp: Itp
+    iva_vivienda: float
+    ajd: Ajd
+
+    def indexed(self, f: float) -> Inmuebles:
+        return self.model_copy(update={"itp": _scaled(self.itp, f, "alto_valor_desde")})
+
+
 class IrpfRules(_Frozen):
-    """All tax rules of a year: IRPF (two halves, mínimos, actividad, reducciones) and RETA."""
+    """All tax rules of a year: IRPF (two halves, mínimos, actividad, reducciones), RETA and real
+    estate."""
 
     year: int  # year the rules come from (not necessarily the tax year)
     estatal: IrpfHalf
@@ -316,6 +367,7 @@ class IrpfRules(_Frozen):
     actividad: ActividadRules
     reducciones: Reducciones
     reta: RetaRules
+    inmuebles: Inmuebles
 
     def indexed(self, f: float) -> IrpfRules:
         """All money thresholds × f (ages are left alone). f=1 — rules as is."""
@@ -330,6 +382,7 @@ class IrpfRules(_Frozen):
             actividad=self.actividad.indexed(f),
             reducciones=self.reducciones.indexed(f),
             reta=self.reta.indexed(f),
+            inmuebles=self.inmuebles.indexed(f),
         )
 
 
@@ -358,6 +411,7 @@ def load_irpf_rules(year: int) -> IrpfRules:
         actividad=load_rules(year, "actividad")["estimacion_directa_simplificada"],
         reducciones=load_rules(year, "reducciones"),
         reta=load_rules(year, "reta"),
+        inmuebles=load_rules(year, "inmuebles"),
     )
 
 

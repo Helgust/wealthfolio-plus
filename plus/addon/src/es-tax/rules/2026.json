@@ -374,5 +374,29 @@
     "base_max": 5101.2
    }
   ]
+ },
+ "inmuebles": {
+  "imputacion": {
+   "general": 0.02,
+   "revisado": 0.011,
+   "sin_valor_catastral": 0.011,
+   "base_sin_valor_catastral": 0.5
+  },
+  "reinversion": {
+   "plazo_anos": 2
+  },
+  "exencion_mayores": {
+   "edad": 65
+  },
+  "itp": {
+   "general": 0.09,
+   "alto_valor": 0.11,
+   "alto_valor_desde": 1000000.0
+  },
+  "iva_vivienda": 0.1,
+  "ajd": {
+   "vivienda_habitual": 0.001,
+   "general": 0.014
+  }
  }
 }

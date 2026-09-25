@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import golden from './fixtures/golden.json';
 import {
   actividad,
+  gananciaExentaVivienda,
+  impuestoCompraVivienda,
+  imputacionRenta,
   indexRules,
   irpfAnual,
   irpfConjunta,
@@ -90,6 +93,27 @@ describe('golden fixtures from the Python reference', () => {
     expect(diff(got, c.expected)).toBeNull();
     // And nothing more: the same set of fields at the top level.
     expect(JSON.stringify(Object.keys(got).sort())).toBe(JSON.stringify(Object.keys(c.expected).sort()));
+  });
+
+  it.each(golden.inmuebles.map((c) => [c.year, c] as const))('inmuebles %i', (_, c) => {
+    const r = loadIrpfRules(c.year).inmuebles;
+    for (const x of c.imputacion) {
+      const inp = x.input;
+      const got = imputacionRenta(inp.valor_catastral, r, {
+        revisado: inp.revisado,
+        precioAdquisicion: inp.precio_adquisicion,
+        dias: inp.dias,
+      });
+      expect(diff(got, x.expected)).toBeNull();
+    }
+    for (const x of c.exenta) {
+      const [g, v, l, ri, e] = x.input as [number, number, number, number, number];
+      expect(diff(gananciaExentaVivienda(g, v, l, ri, e, r), x.expected)).toBeNull();
+    }
+    for (const x of c.compra) {
+      const { precio, nueva, habitual } = x.input;
+      expect(diff(impuestoCompraVivienda(precio, { nueva, habitual }, r), x.expected)).toBeNull();
+    }
   });
 
   it.each(golden.irpf_conjunta.map((c, i) => [i, c] as const))('irpf_conjunta #%i', (_, c) => {

@@ -9,3 +9,4 @@
 | `reta.yaml` | tramos RETA, bases, tipos (Orden PJC/297/2026) | сверено с BOE |
 | `actividad.yaml` | gastos de difícil justificación, EDS | по BOE на 09.2026; TODO: verify в конце года |
 | `reducciones.yaml` | art. 32.2–32.3, лимиты планов пенсий, compensación, tributación conjunta (art. 84.2.3º) | LIRPF (конс. текст 09.2026); 2 пункта TODO: verify |
+| `inmuebles.yaml` | imputación de rentas (art. 85), exenciones vivienda habitual (arts. 38.1, 33.4.b), ITP / IVA / AJD при покупке | LIRPF, RIRPF, Ley 13/1997 GVA (конс. текст 10.08.2026), Ley 37/1992 — сверено с BOE |

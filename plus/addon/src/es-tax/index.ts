@@ -2,6 +2,7 @@
 // fixtures (golden.test.ts).
 export * from './autonomo';
 export * from './compensacion';
+export * from './inmuebles';
 export * from './irpf';
 export * from './minimos';
 export * from './reducciones';
