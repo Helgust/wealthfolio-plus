@@ -74,6 +74,16 @@
 - API аддона в песочнице — Proxy: у него есть любое свойство. Наличие метода проверять только вызовом
   (неизвестный метод хост отклоняет).
 - Node 24 запускает `.ts` напрямую: `node --input-type=module -e "await import('./src/x.ts')"`.
+- **Tailwind в аддоне — только классы, которые уже есть в CSS хоста.** Собственный CSS аддона в iframe
+  не подключается: `h-[300px]` работает (хост его использует), `h-[320px]` — нет, элемент получает
+  высоту 0. Произвольные размеры задавать через `style`.
+- Скриншот запущенного форка: запускать с `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`,
+  затем `chromium.connectOverCDP('http://127.0.0.1:9222')` из `@playwright/test` корня. Страница аддона —
+  второй frame (`about:srcdoc`). Маршрут менять через `history.pushState` + `popstate`. В Git Bash
+  пути вида `/addons/...` в аргументах превращаются в пути Windows — `MSYS_NO_PATHCONV=1`.
+- Не собирать аддон (`pnpm build`) при запущенном `pnpm dev:server`: оба пишут в `dist`, и хост на
+  время ловит «Failed to start add-on».
+- `pnpm test` в `plus/addon` — vitest (golden-фикстуры, движок); `pnpm type-check` — tsc.
 
 Python-эталон:
 
