@@ -259,12 +259,24 @@ def _conjunta_cases(year: int, rules) -> list[dict]:
     return cases
 
 
+INDEX_FACTORS = [1.0, 1.1, 1.3721]
+
+
+def _indexed_cases(year: int, rules) -> list[dict]:
+    """IrpfRules.indexed: the projection of the rules to later years when a plan indexes them."""
+    return [
+        {"year": year, "factor": f, "expected": rules.indexed(f).model_dump(mode="json")}
+        for f in INDEX_FACTORS
+    ]
+
+
 def fixtures() -> dict:
     out: dict[str, list] = {
         "actividad": [],
         "irpf_anual": [],
         "irpf_cadena": [],
         "irpf_conjunta": [],
+        "rules_indexed": [],
     }
     for year in available_years():
         rules = load_irpf_rules(year)
@@ -272,6 +284,7 @@ def fixtures() -> dict:
         out["irpf_anual"] += _individual_cases(year, rules)
         out["irpf_cadena"] += _cadena_cases(year, rules)
         out["irpf_conjunta"] += _conjunta_cases(year, rules)
+        out["rules_indexed"] += _indexed_cases(year, rules)
     return out
 
 

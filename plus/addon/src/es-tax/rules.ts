@@ -140,9 +140,92 @@ export function loadIrpfRules(year: number): IrpfRules {
   return rules;
 }
 
+/** Copy of obj with the listed money fields multiplied by f. */
+function scaled<T extends object>(obj: T, f: number, ...keys: (keyof T)[]): T {
+  const out = { ...obj };
+  for (const k of keys) (out[k] as number) = (obj[k] as number) * f;
+  return out;
+}
+
+const scaleBounds = (s: Scale, f: number): Scale => ({
+  brackets: s.brackets.map((b) => ({ ...b, upto: b.upto === null ? null : b.upto * f })),
+});
+
+function indexHalf(h: IrpfHalf, f: number): IrpfHalf {
+  const m = h.minimos;
+  return {
+    general: scaleBounds(h.general, f),
+    ahorro: scaleBounds(h.ahorro, f),
+    minimos: {
+      contribuyente: scaled(m.contribuyente, f, 'general', 'mayor_65', 'mayor_75'),
+      descendientes: { por_orden: m.descendientes.por_orden.map((v) => v * f), menor_3: m.descendientes.menor_3 * f },
+      ascendientes: scaled(m.ascendientes, f, 'general', 'mayor_75'),
+      discapacidad: scaled(m.discapacidad, f, 'grado_33', 'grado_65', 'asistencia'),
+    },
+  };
+}
+
+/**
+ * All money thresholds × f; ages, rates and the compensación rules are left alone. Port of
+ * IrpfRules.indexed in plus/python (checked against it on golden fixtures). f = 1 — the rules as is.
+ */
+export function indexRules(r: IrpfRules, f: number): IrpfRules {
+  if (f === 1) return r;
+  const red = r.reducciones;
+  const dep = red.actividad.dependiente;
+  return {
+    year: r.year,
+    estatal: indexHalf(r.estatal, f),
+    autonomica: indexHalf(r.autonomica, f),
+    condiciones: scaled(r.condiciones, f, 'renta_max_familiar'),
+    actividad: {
+      gastos_dificil_justificacion: scaled(r.actividad.gastos_dificil_justificacion, f, 'limit'),
+    },
+    reducciones: {
+      actividad: {
+        dependiente: {
+          general: dep.general * f,
+          adicional: scaled(dep.adicional, f, 'rend_max', 'otras_rentas_max', 'plano_hasta', 'importe'),
+          discapacidad_33: dep.discapacidad_33 * f,
+          discapacidad_65: dep.discapacidad_65 * f,
+        },
+        rentas_bajas: scaled(red.actividad.rentas_bajas, f, 'rentas_max', 'plano_hasta', 'importe'),
+        inicio_actividad: scaled(red.actividad.inicio_actividad, f, 'base_max'),
+      },
+      trabajo: {
+        otros_gastos: red.trabajo.otros_gastos * f,
+        reduccion: scaled(
+          red.trabajo.reduccion,
+          f,
+          'rend_max',
+          'otras_rentas_max',
+          'plano_hasta',
+          'importe',
+          'quiebra',
+          'importe_quiebra',
+        ),
+      },
+      prevision_social: scaled(red.prevision_social, f, 'limite_general', 'incremento_autonomo'),
+      compensacion: red.compensacion,
+      tributacion_conjunta: scaled(red.tributacion_conjunta, f, 'reduccion_biparental'),
+    },
+    reta: {
+      ...r.reta,
+      base_maxima: r.reta.base_maxima * f,
+      tramos: r.reta.tramos.map((t) => ({
+        ...t,
+        upto: t.upto === null ? null : t.upto * f,
+        base_min: t.base_min * f,
+        base_max: t.base_max * f,
+      })),
+    },
+  };
+}
+
 /**
  * Rules for computing year: that year or the latest available before it. Future years get the
- * frozen rules of the last known year (Spanish scales are not indexed automatically).
+ * frozen rules of the last known year (Spanish scales are not indexed automatically); a plan
+ * that indexes them applies indexRules on top.
  */
 export function rulesForYear(year: number): IrpfRules {
   const past = RULES.filter((r) => r.year <= year);

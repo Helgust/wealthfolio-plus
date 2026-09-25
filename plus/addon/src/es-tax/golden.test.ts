@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import golden from './fixtures/golden.json';
 import {
   actividad,
+  indexRules,
   irpfAnual,
   irpfConjunta,
   loadIrpfRules,
@@ -82,6 +83,13 @@ describe('golden fixtures from the Python reference', () => {
       });
       expect(diff(prev, ano.expected)).toBeNull();
     }
+  });
+
+  it.each(golden.rules_indexed.map((c, i) => [i, c] as const))('rules indexed #%i', (_, c) => {
+    const got = indexRules(loadIrpfRules(c.year), c.factor);
+    expect(diff(got, c.expected)).toBeNull();
+    // And nothing more: the same set of fields at the top level.
+    expect(JSON.stringify(Object.keys(got).sort())).toBe(JSON.stringify(Object.keys(c.expected).sort()));
   });
 
   it.each(golden.irpf_conjunta.map((c, i) => [i, c] as const))('irpf_conjunta #%i', (_, c) => {
