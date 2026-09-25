@@ -19,17 +19,22 @@ import {
   Switch,
 } from '@wealthfolio/ui';
 import { Plus, Trash2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
+import type { Account } from '../engine/portfolio';
 import { PlanSchema, type Expense, type Person, type Plan } from '../model/plan';
+import { Field, NumberInput, PercentInput } from './form-fields';
+import { InvestmentsEditor } from './investments-editor';
 
 interface Props {
   plan: Plan;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (plan: Plan) => Promise<void>;
+  /** Счета в модели — для flows и порядка изъятий */
+  accounts: Account[];
 }
 
-export function PlanEditor({ plan, open, onOpenChange, onSave }: Props) {
+export function PlanEditor({ plan, open, onOpenChange, onSave, accounts }: Props) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="overflow-y-auto" style={{ width: 600, maxWidth: 600 }}>
@@ -40,48 +45,16 @@ export function PlanEditor({ plan, open, onOpenChange, onSave }: Props) {
           </SheetDescription>
         </SheetHeader>
         {/* Форма монтируется при открытии, поэтому черновик всегда начинается с плана. */}
-        {open && <PlanForm plan={plan} onSave={onSave} onCancel={() => onOpenChange(false)} />}
+        {open && (
+          <PlanForm
+            plan={plan}
+            accounts={accounts}
+            onSave={onSave}
+            onCancel={() => onOpenChange(false)}
+          />
+        )}
       </SheetContent>
     </Sheet>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function NumberInput({
-  value,
-  onChange,
-  step = 1,
-}: {
-  value: number | null;
-  onChange: (v: number | null) => void;
-  step?: number;
-}) {
-  return (
-    <Input
-      type="number"
-      step={step}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-    />
-  );
-}
-
-/** Процент в поле, доля в модели. */
-function PercentInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <NumberInput
-      value={Math.round(value * 10000) / 100}
-      step={0.1}
-      onChange={(v) => onChange((v ?? 0) / 100)}
-    />
   );
 }
 
@@ -102,10 +75,12 @@ const newExpense = (): Expense => ({
 
 function PlanForm({
   plan,
+  accounts,
   onSave,
   onCancel,
 }: {
   plan: Plan;
+  accounts: Account[];
   onSave: (plan: Plan) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -352,6 +327,9 @@ function PlanForm({
           <Plus className="h-4 w-4" /> Add expense
         </Button>
       </section>
+
+      <Separator />
+      <InvestmentsEditor draft={draft} set={set} accounts={accounts} />
 
       {error && <p className="text-destructive text-sm">{error}</p>}
       <SheetFooter className="flex-row justify-end gap-2 px-0">

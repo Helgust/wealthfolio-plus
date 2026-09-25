@@ -10,12 +10,14 @@ import {
 } from '../es-tax';
 import { defaultPlan, type Plan } from '../model/plan';
 import { parsePlan } from '../model/plan-storage';
-import { endYear, runPlan } from './run-plan';
+import { endYear, runPlan, type StartingPoint } from './run-plan';
+import { cashAccount, ZERO_RETURNS } from './test-helpers';
 
-const START = { netWorth: 100_000, cash: 30_000 };
+const START: StartingPoint = { netWorth: 100_000, accounts: [cashAccount(30_000)] };
 
+/** План фазы 1: без доходностей, весь поток — в cash. */
 function plan(overrides: Partial<Plan> = {}): Plan {
-  return { ...defaultPlan(2026), ...overrides };
+  return { ...defaultPlan(2026), returns: ZERO_RETURNS, ...overrides };
 }
 
 const persona = (edad: number) => ({ edad, discapacidad: 'ninguna', asistencia: false }) as const;
@@ -34,7 +36,7 @@ describe('runPlan', () => {
     expect(row.irpf).toBeCloseTo(total(irpf.cuota_liquida), 6);
     expect(row.irpfEstatal + row.irpfAutonomica).toBeCloseTo(row.irpf, 6);
     expect(row.netCashFlow).toBeCloseTo(40_000 - 5_000 - act.cuota_reta - row.irpf - 20_000, 6);
-    expect(row.cash).toBeCloseTo(START.cash + row.netCashFlow, 6);
+    expect(row.cash).toBeCloseTo(30_000 + row.netCashFlow, 6);
     expect(row.netWorth).toBeCloseTo(START.netWorth + row.netCashFlow, 6);
   });
 
@@ -57,7 +59,7 @@ describe('runPlan', () => {
     expect(at(65).people[0].retaTramo).toBeNull();
     // Кумулятивный поток сходится с остатком.
     const flows = rows.reduce((s, r) => s + r.netCashFlow, 0);
-    expect(rows.at(-1)!.cash).toBeCloseTo(START.cash + flows, 4);
+    expect(rows.at(-1)!.cash).toBeCloseTo(30_000 + flows, 4);
   });
 
   it('respects expense start and end years', () => {
@@ -161,5 +163,11 @@ describe('parsePlan', () => {
     expect(parsePlan(JSON.stringify(bad), 2026).error).toBeDefined();
     const joint1 = { ...plan(), filing: 'joint' };
     expect(parsePlan(JSON.stringify(joint1), 2026).isDefault).toBe(true);
+  });
+
+  it('reads a phase 1 plan: new fields get defaults', () => {
+    const v1: Record<string, unknown> = { ...defaultPlan(2026) };
+    for (const k of ['returns', 'flows', 'withdrawalOrder', 'pensionAccessAge']) delete v1[k];
+    expect(parsePlan(JSON.stringify(v1), 2026)).toEqual({ plan: defaultPlan(2026), isDefault: false });
   });
 });

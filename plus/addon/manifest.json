@@ -51,6 +51,7 @@
       "category": "portfolio",
       "functions": [
         "getHoldings",
+        "getHolding",
         "getHistoricalValuations",
         "getLatestValuations",
         "getIncomeSummary",

@@ -1,5 +1,7 @@
-// Модель плана (фаза 1): домохозяйство, доход autónomo, расходы. Схема Zod проверяет план,
-// прочитанный из storage: старый или испорченный JSON не должен молча давать нули.
+// Модель плана: домохозяйство, доход autónomo, расходы; с фазы 2 — доходности счетов, flows
+// профицита и порядок изъятий. Схема Zod проверяет план, прочитанный из storage: старый или
+// испорченный JSON не должен молча давать нули. Поля фазы 2 — с default, поэтому план фазы 1
+// читается без миграции.
 import { z } from 'zod';
 
 const money = z.number().finite().min(0);
@@ -37,6 +39,40 @@ export const ExpenseSchema = z.object({
   endYear: year.nullable(),
 });
 
+/** Номинальные ожидаемые доходности по испанским типам счетов, доля в год. */
+export const ReturnsSchema = z.object({
+  /** Проценты по CASH-счетам — rendimientos del capital mobiliario */
+  cashInterest: rate,
+  /** Рост fondos de inversión (накопительные: выплат нет) */
+  fundGrowth: rate,
+  /** Рост цены ETF и акций */
+  brokerageGrowth: rate,
+  /** Дивиденды брокерского счёта от стоимости на начало года */
+  brokerageYield: rate,
+  /** Рост planes de pensiones */
+  pensionGrowth: rate,
+});
+
+/**
+ * Куда идёт профицит года, по порядку. max — до вычитаемого лимита для плана пенсий, иначе весь
+ * остаток; fixed — сумма в год; percent — доля остатка (amount 0…1); untilBalance — пополнить до
+ * баланса. Суммы fixed и untilBalance — в ценах первого года плана. Остаток после flows — на
+ * первый CASH-счёт.
+ */
+export const FlowSchema = z.object({
+  accountId: z.string().min(1),
+  mode: z.enum(['max', 'fixed', 'percent', 'untilBalance']),
+  amount: money,
+});
+
+export const DEFAULT_RETURNS: Returns = {
+  cashInterest: 0.015,
+  fundGrowth: 0.06,
+  brokerageGrowth: 0.045,
+  brokerageYield: 0.015,
+  pensionGrowth: 0.05,
+};
+
 export const PlanSchema = z
   .object({
     version: z.literal(1),
@@ -50,6 +86,12 @@ export const PlanSchema = z
     people: z.array(PersonSchema).min(1).max(2),
     children: z.array(ChildSchema).max(10),
     expenses: z.array(ExpenseSchema).max(50),
+    returns: ReturnsSchema.default(DEFAULT_RETURNS),
+    flows: z.array(FlowSchema).max(30).default([]),
+    /** id счетов Wealthfolio; пусто — cash → fondos → брокерский → планы пенсий */
+    withdrawalOrder: z.array(z.string().min(1)).max(50).default([]),
+    /** С этого возраста владельца план пенсий доступен для изъятий */
+    pensionAccessAge: z.number().int().min(50).max(80).default(65),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
     message: 'Joint filing needs two people',
@@ -60,6 +102,8 @@ export type AutonomoIncome = z.infer<typeof AutonomoIncomeSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
 export type Expense = z.infer<typeof ExpenseSchema>;
+export type Returns = z.infer<typeof ReturnsSchema>;
+export type Flow = z.infer<typeof FlowSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type Filing = Plan['filing'];
 
@@ -90,5 +134,9 @@ export function defaultPlan(startYear: number): Plan {
         endYear: null,
       },
     ],
+    returns: DEFAULT_RETURNS,
+    flows: [],
+    withdrawalOrder: [],
+    pensionAccessAge: 65,
   };
 }

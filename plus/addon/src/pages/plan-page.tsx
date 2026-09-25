@@ -1,5 +1,5 @@
 // Страница плана в раскладке ProjectionLab: график net worth, ключевые метрики, вкладки.
-// Фаза 1: работают «Taxes» и «Table», остальные вкладки — заглушки.
+// Работают «Accounts», «Taxes» и «Table»; Plan, Cash flow, Monte Carlo — заглушки.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -20,6 +20,7 @@ import {
 } from '@wealthfolio/ui';
 import { Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AccountsTab } from '../components/accounts-tab';
 import { LedgerTable } from '../components/ledger-table';
 import { NetWorthChart } from '../components/net-worth-chart';
 import { PlanEditor } from '../components/plan-editor';
@@ -27,12 +28,14 @@ import { TaxesTab } from '../components/taxes-tab';
 import { runPlan, type PlanResult } from '../engine/run-plan';
 import { availableYears } from '../es-tax';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
-import { loadStartingPoint } from '../lib/starting-point';
+import { buildStart, loadPortfolio } from '../lib/starting-point';
+import { loadAccountSettings, saveAccountSettings, type AccountSettings } from '../model/accounts';
 import type { Plan } from '../model/plan';
 import { loadPlan, savePlan, type LoadedPlan } from '../model/plan-storage';
 
 const PLAN_KEY = ['planificador-es', 'plan'];
-const START_KEY = ['planificador-es', 'start'];
+const PORTFOLIO_KEY = ['planificador-es', 'portfolio'];
+const SETTINGS_KEY = ['planificador-es', 'account-settings'];
 export const CHECKS_ROUTE = '/addons/planificador-es/checks';
 const lastRulesYear = availableYears().at(-1);
 
@@ -57,21 +60,23 @@ function Stub({ children }: { children: string }) {
 export function PlanPage({ ctx }: { ctx: AddonContext }) {
   const firstYear = new Date().getFullYear();
   const queryClient = useQueryClient();
-  const start = useQuery({ queryKey: START_KEY, queryFn: () => loadStartingPoint(ctx) });
+  const portfolio = useQuery({ queryKey: PORTFOLIO_KEY, queryFn: () => loadPortfolio(ctx) });
+  const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: () => loadAccountSettings(ctx) });
   const loaded = useQuery({ queryKey: PLAN_KEY, queryFn: () => loadPlan(ctx, firstYear) });
   const [mode, setMode] = useState<ValueMode>('nominal');
   const [editing, setEditing] = useState(false);
 
   const plan = loaded.data?.plan;
-  const result = useMemo(
-    () => (plan && start.data ? runPlan(plan, start.data) : null),
-    [plan, start.data],
+  const start = useMemo(
+    () => (portfolio.data && settings.data ? buildStart(portfolio.data, settings.data) : null),
+    [portfolio.data, settings.data],
   );
+  const result = useMemo(() => (plan && start ? runPlan(plan, start) : null), [plan, start]);
   // Для пары считаем и другой вид декларации — сравнение на вкладке «Taxes».
   const alternative = useMemo<PlanResult | null>(() => {
-    if (!plan || !start.data || plan.people.length !== 2) return null;
-    return runPlan(plan, start.data, plan.filing === 'joint' ? 'individual' : 'joint');
-  }, [plan, start.data]);
+    if (!plan || !start || plan.people.length !== 2) return null;
+    return runPlan(plan, start, plan.filing === 'joint' ? 'individual' : 'joint');
+  }, [plan, start]);
 
   async function save(next: Plan) {
     await savePlan(ctx, next);
@@ -79,7 +84,12 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     setEditing(false);
   }
 
-  const error = start.error ?? loaded.error;
+  async function saveSettings(next: AccountSettings) {
+    queryClient.setQueryData<AccountSettings>(SETTINGS_KEY, next);
+    await saveAccountSettings(ctx, next);
+  }
+
+  const error = portfolio.error ?? settings.error ?? loaded.error;
   if (error) {
     return (
       <Page>
@@ -91,7 +101,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
       </Page>
     );
   }
-  if (!plan || !start.data || !result || !loaded.data) {
+  if (!plan || !start || !portfolio.data || !settings.data || !result || !loaded.data) {
     return (
       <Page>
         <PageContent>
@@ -101,7 +111,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     );
   }
 
-  const currency = start.data.currency ?? 'EUR';
+  const currency = portfolio.data.currency ?? 'EUR';
+  const startCash = start.accounts.filter((a) => a.kind === 'cash').reduce((s, a) => s + a.cash, 0);
   const rows = result.rows;
   const last = rows[rows.length - 1];
   const taxes = rows.reduce((s, r) => s + inMode(r.irpf + r.reta, r.deflator, mode), 0);
@@ -153,8 +164,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <div className="grid grid-cols-4 gap-6">
               <Metric
                 label="Net worth today"
-                value={formatMoney(start.data.netWorth, currency)}
-                hint={start.data.exact ? 'from Wealthfolio' : 'sum of accounts (no alternative assets)'}
+                value={formatMoney(start.netWorth, currency)}
+                hint={portfolio.data.exact ? 'from Wealthfolio' : 'sum of accounts (no alternative assets)'}
               />
               <Metric
                 label={`Net worth in ${last.year}`}
@@ -164,7 +175,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               <Metric
                 label="Cash"
                 value={cashOut ? `Runs out in ${cashOut.year}` : 'Lasts the whole plan'}
-                hint={`starts at ${formatMoney(start.data.cash, currency)} (cash accounts)`}
+                hint={`starts at ${formatMoney(startCash, currency)} (cash accounts)`}
               />
             </div>
             <NetWorthChart rows={rows} currency={currency} mode={mode} />
@@ -178,6 +189,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <TabsTrigger value="taxes">Taxes</TabsTrigger>
             <TabsTrigger value="montecarlo">Monte Carlo</TabsTrigger>
             <TabsTrigger value="table">Table</TabsTrigger>
+            <TabsTrigger value="accounts">Accounts</TabsTrigger>
           </TabsList>
           <TabsContent value="plan">
             <Stub>Income, expense and milestone cards come in phase 3. Use “Edit plan” for now.</Stub>
@@ -194,17 +206,31 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
           <TabsContent value="table">
             <LedgerTable rows={rows} currency={currency} mode={mode} />
           </TabsContent>
+          <TabsContent value="accounts">
+            <AccountsTab
+              portfolio={portfolio.data}
+              settings={settings.data}
+              people={plan.people.map((p) => p.name)}
+              currency={currency}
+              onChange={saveSettings}
+            />
+          </TabsContent>
         </Tabs>
 
         <p className="text-muted-foreground text-xs">
-          Phase 1 model: autónomo income, RETA, IRPF and household expenses; investments do not
-          grow yet (phase 2). Tax rules after {lastRulesYear} are frozen at {lastRulesYear}.{' '}
+          Deterministic projection with constant returns. Tax rules after {lastRulesYear} are frozen at {lastRulesYear}.{' '}
           <button className="underline" onClick={() => ctx.api.navigation.navigate(CHECKS_ROUTE)}>
             Sandbox checks
           </button>
         </p>
       </PageContent>
-      <PlanEditor plan={plan} open={editing} onOpenChange={setEditing} onSave={save} />
+      <PlanEditor
+        plan={plan}
+        accounts={start.accounts}
+        open={editing}
+        onOpenChange={setEditing}
+        onSave={save}
+      />
     </Page>
   );
 }
