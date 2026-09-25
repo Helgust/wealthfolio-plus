@@ -1,6 +1,6 @@
 // Plan page in the ProjectionLab layout: net worth chart, key metrics, tabs.
 // "Accounts", "Taxes" and "Table" work; Plan, Cash flow, Monte Carlo are stubs.
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
   Alert,
@@ -23,19 +23,25 @@ import { useMemo, useState } from 'react';
 import { AccountsTab } from '../components/accounts-tab';
 import { LedgerTable } from '../components/ledger-table';
 import { NetWorthChart } from '../components/net-worth-chart';
+import { PageMessage } from '../components/page-message';
 import { PlanEditor } from '../components/plan-editor';
+import { PlanSwitcher } from '../components/plan-switcher';
 import { TaxesTab } from '../components/taxes-tab';
 import { runPlan, type PlanResult } from '../engine/run-plan';
 import { availableYears } from '../es-tax';
+import { SETTINGS_KEY, usePlannerData } from '../hooks/use-planner-data';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
-import { buildStart, loadPortfolio } from '../lib/starting-point';
-import { loadAccountSettings, saveAccountSettings, type AccountSettings } from '../model/accounts';
-import type { Plan } from '../model/plan';
-import { loadPlan, savePlan, type LoadedPlan } from '../model/plan-storage';
+import { saveAccountSettings, type AccountSettings } from '../model/accounts';
+import { defaultPlan, type Plan } from '../model/plan';
+import {
+  activeEntry,
+  addPlan,
+  deletePlan,
+  savePlan,
+  selectPlan,
+  type PlanBook,
+} from '../model/plan-storage';
 
-const PLAN_KEY = ['planificador-es', 'plan'];
-const PORTFOLIO_KEY = ['planificador-es', 'portfolio'];
-const SETTINGS_KEY = ['planificador-es', 'account-settings'];
 export const CHECKS_ROUTE = '/addons/planificador-es/checks';
 const lastRulesYear = availableYears().at(-1);
 
@@ -58,19 +64,14 @@ function Stub({ children }: { children: string }) {
 }
 
 export function PlanPage({ ctx }: { ctx: AddonContext }) {
-  const firstYear = new Date().getFullYear();
   const queryClient = useQueryClient();
-  const portfolio = useQuery({ queryKey: PORTFOLIO_KEY, queryFn: () => loadPortfolio(ctx) });
-  const settings = useQuery({ queryKey: SETTINGS_KEY, queryFn: () => loadAccountSettings(ctx) });
-  const loaded = useQuery({ queryKey: PLAN_KEY, queryFn: () => loadPlan(ctx, firstYear) });
+  const { portfolio, settings, book, start, error, changePlans } = usePlannerData(ctx);
   const [mode, setMode] = useState<ValueMode>('nominal');
   const [editing, setEditing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const plan = loaded.data?.plan;
-  const start = useMemo(
-    () => (portfolio.data && settings.data ? buildStart(portfolio.data, settings.data) : null),
-    [portfolio.data, settings.data],
-  );
+  const active = book && activeEntry(book);
+  const plan = active?.plan;
   const result = useMemo(() => (plan && start ? runPlan(plan, start) : null), [plan, start]);
   // For a couple, also compute the other filing type — compared on the "Taxes" tab.
   const alternative = useMemo<PlanResult | null>(() => {
@@ -79,9 +80,17 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
   }, [plan, start]);
 
   async function save(next: Plan) {
-    await savePlan(ctx, next);
-    queryClient.setQueryData<LoadedPlan>(PLAN_KEY, { plan: next, isDefault: false });
+    await changePlans((b) => savePlan(ctx.api.storage, b, active!.id, next));
     setEditing(false);
+  }
+
+  async function run(op: (b: PlanBook) => Promise<PlanBook>) {
+    setActionError(null);
+    try {
+      await changePlans(op);
+    } catch (e) {
+      setActionError(String(e));
+    }
   }
 
   async function saveSettings(next: AccountSettings) {
@@ -89,29 +98,12 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     await saveAccountSettings(ctx, next);
   }
 
-  const error = portfolio.error ?? settings.error ?? loaded.error;
-  if (error) {
-    return (
-      <Page>
-        <PageContent>
-          <Alert variant="destructive">
-            <AlertDescription>Could not load data: {String(error)}</AlertDescription>
-          </Alert>
-        </PageContent>
-      </Page>
-    );
-  }
-  if (!plan || !start || !portfolio.data || !settings.data || !result || !loaded.data) {
-    return (
-      <Page>
-        <PageContent>
-          <p className="text-muted-foreground text-sm">Loading…</p>
-        </PageContent>
-      </Page>
-    );
+  if (error) return <PageMessage error={error} />;
+  if (!plan || !active || !book || !start || !portfolio || !settings || !result) {
+    return <PageMessage />;
   }
 
-  const currency = portfolio.data.currency ?? 'EUR';
+  const currency = portfolio.currency ?? 'EUR';
   const startCash = start.accounts.filter((a) => a.kind === 'cash').reduce((s, a) => s + a.cash, 0);
   const rows = result.rows;
   const last = rows[rows.length - 1];
@@ -125,6 +117,22 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         text={`${plan.startYear}–${last.year} · ${plan.people.map((p) => p.name).join(' & ')}`}
         actions={
           <div className="flex items-center gap-2">
+            <PlanSwitcher
+              book={book}
+              onSelect={(id) => run((b) => selectPlan(ctx.api.storage, b, id))}
+              onNew={() =>
+                run((b) =>
+                  addPlan(ctx.api.storage, b, {
+                    ...defaultPlan(new Date().getFullYear()),
+                    name: `Plan ${b.entries.length + 1}`,
+                  }),
+                )
+              }
+              onDuplicate={() =>
+                run((b) => addPlan(ctx.api.storage, b, { ...plan, name: `${plan.name.slice(0, 73)} (copy)` }))
+              }
+              onDelete={() => run((b) => deletePlan(ctx.api.storage, b, active.id))}
+            />
             <ToggleGroup
               type="single"
               value={mode}
@@ -142,11 +150,16 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         }
       />
       <PageContent className="space-y-4">
-        {loaded.data.isDefault && (
+        {actionError && (
+          <Alert variant="destructive">
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        )}
+        {active.isDefault && (
           <Alert>
             <AlertDescription>
-              {loaded.data.error
-                ? `The saved plan could not be read (${loaded.data.error}). Showing a template.`
+              {active.error
+                ? `The saved plan could not be read (${active.error}). Showing a template.`
                 : 'This is a template plan with placeholder amounts. Edit it to enter your own.'}
             </AlertDescription>
           </Alert>
@@ -165,7 +178,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               <Metric
                 label="Net worth today"
                 value={formatMoney(start.netWorth, currency)}
-                hint={portfolio.data.exact ? 'from Wealthfolio' : 'sum of accounts (no alternative assets)'}
+                hint={portfolio.exact ? 'from Wealthfolio' : 'sum of accounts (no alternative assets)'}
               />
               <Metric
                 label={`Net worth in ${last.year}`}
@@ -208,8 +221,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
           </TabsContent>
           <TabsContent value="accounts">
             <AccountsTab
-              portfolio={portfolio.data}
-              settings={settings.data}
+              portfolio={portfolio}
+              settings={settings}
               people={plan.people.map((p) => p.name)}
               currency={currency}
               onChange={saveSettings}

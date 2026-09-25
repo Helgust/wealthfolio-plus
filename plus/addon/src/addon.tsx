@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AddonContext, AddonEnableFunction } from '@wealthfolio/addon-sdk';
 import { registerTranslations } from '@wealthfolio/addon-sdk';
 import type { ReactNode } from 'react';
+import { ComparePage } from './pages/compare-page';
 import { Phase0Page } from './pages/phase0-page';
 import { CHECKS_ROUTE, PlanPage } from './pages/plan-page';
 
@@ -18,6 +19,12 @@ const WithQuery = ({ children }: { children: ReactNode }) => (
 const PlanRoute = () => (
   <WithQuery>
     <PlanPage ctx={addonCtx!} />
+  </WithQuery>
+);
+
+const CompareRoute = () => (
+  <WithQuery>
+    <ComparePage ctx={addonCtx!} />
   </WithQuery>
 );
 
@@ -40,6 +47,7 @@ const enable: AddonEnableFunction = (ctx) => {
 
   // `id` must match `contributes.routes[].id` in manifest.json.
   ctx.router.add({ id: 'planificador-es', path: '/addons/planificador-es', component: PlanRoute });
+  ctx.router.add({ id: 'planificador-es-compare', path: '/addons/planificador-es/compare', component: CompareRoute });
   ctx.router.add({ id: 'planificador-es-checks', path: CHECKS_ROUTE, component: ChecksRoute });
 
   ctx.onDisable(() => {

@@ -16,16 +16,14 @@ import {
 } from '@wealthfolio/ui/chart';
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
+import { FOREST, OCHRE, PURPLE, TERRACOTTA } from './palette';
 
-// Own palette in Wealthfolio tones (forest, ochre, terracotta, purple), but more saturated: the
-// host colors --chart-1…4 are not distinguishable in a stack. Order is bottom to top; both themes
-// checked with the dataviz validator on the host backgrounds (#fffcf0 and #100f0f): lightness band,
-// chroma, adjacent pairs under color blindness (ΔE ≥ 8) and normal vision (ΔE ≥ 15), contrast ≥ 3:1.
+// Stack order is bottom to top — the palette order, validated for adjacent pairs.
 const config = {
-  cash: { label: 'Cash', theme: { light: '#1d7a58', dark: '#2a9168' } },
-  fund: { label: 'Fondos', theme: { light: '#b08a14', dark: '#b78f1b' } },
-  brokerage: { label: 'Brokerage', theme: { light: '#a9403a', dark: '#c24c46' } },
-  pension: { label: 'Pension plans', theme: { light: '#7462b8', dark: '#8f7ed2' } },
+  cash: { label: 'Cash', theme: FOREST },
+  fund: { label: 'Fondos', theme: OCHRE },
+  brokerage: { label: 'Brokerage', theme: TERRACOTTA },
+  pension: { label: 'Pension plans', theme: PURPLE },
   netWorth: { label: 'Net worth', color: 'var(--foreground)' },
 } satisfies ChartConfig;
 const STACK = ['cash', 'fund', 'brokerage', 'pension'] as const;

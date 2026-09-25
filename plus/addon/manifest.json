@@ -14,6 +14,9 @@
         "id": "planificador-es"
       },
       {
+        "id": "planificador-es-compare"
+      },
+      {
         "id": "planificador-es-checks"
       }
     ],
@@ -25,6 +28,13 @@
           "label": "Planificador ES",
           "icon": "calculator",
           "order": 100
+        },
+        {
+          "id": "planificador-es-compare",
+          "route": "planificador-es-compare",
+          "label": "Compare plans",
+          "icon": "scales",
+          "order": 101
         }
       ]
     }
