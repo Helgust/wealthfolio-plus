@@ -21,7 +21,15 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Account } from '../engine/portfolio';
-import { PlanSchema, type Expense, type Milestone, type Person, type Plan } from '../model/plan';
+import { availableYears } from '../es-tax';
+import {
+  PlanSchema,
+  type Expense,
+  type Milestone,
+  type Person,
+  type Plan,
+  type SpendingRule,
+} from '../model/plan';
 import { Field, NumberInput, PercentInput } from './form-fields';
 import { InvestmentsEditor } from './investments-editor';
 import { milestoneUses, TimingInput } from './timing-input';
@@ -187,6 +195,17 @@ function HouseholdSection({ draft, set }: SectionProps) {
             <SelectContent>
               <SelectItem value="individual">Individual</SelectItem>
               <SelectItem value="joint">Joint (tributación conjunta)</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label={`Tax thresholds after ${availableYears().at(-1)}`}>
+          <Select value={draft.taxRules} onValueChange={(v) => set({ taxRules: v as Plan['taxRules'] })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="frozen">Frozen (as the law stands)</SelectItem>
+              <SelectItem value="indexed">Indexed to inflation</SelectItem>
             </SelectContent>
           </Select>
         </Field>
@@ -508,6 +527,74 @@ function ExpensesSection({ draft, set, titled }: SectionProps) {
       <Button variant="outline" size="sm" onClick={() => set({ expenses: [...draft.expenses, newExpense()] })}>
         <Plus className="h-4 w-4" /> Add expense
       </Button>
+      <SpendingRuleEditor draft={draft} set={set} />
     </section>
+  );
+}
+
+const RULE_LABEL: Record<SpendingRule['kind'], string> = {
+  planned: 'As planned',
+  percent: '% of portfolio',
+  guytonKlinger: 'Guyton–Klinger guardrails',
+};
+
+function SpendingRuleEditor({ draft, set }: SectionProps) {
+  const rule = draft.spending;
+  const start = rule.kind === 'planned' ? null : rule.start;
+
+  function choose(kind: SpendingRule['kind']) {
+    const from = start ?? (draft.milestones[0] ? { kind: 'milestone' as const, id: draft.milestones[0].id } : { kind: 'year' as const, year: draft.startYear });
+    if (kind === 'planned') set({ spending: { kind } });
+    else if (kind === 'percent') set({ spending: { kind, start: from, rate: 0.04 } });
+    else set({ spending: { kind, start: from, rate: 0.05, guardrail: 0.2, adjustment: 0.1 } });
+  }
+
+  return (
+    <div className="space-y-3 pt-3">
+      <h3 className="font-medium">Spending rule</h3>
+      <p className="text-muted-foreground text-xs">
+        From its start, the rule sets how much the accounts give each year. Discretionary spending is what income and
+        that amount leave after essential expenses and taxes; the planned discretionary expenses no longer apply.
+        Essential expenses are always paid.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Rule">
+          <Select value={rule.kind} onValueChange={(v) => choose(v as SpendingRule['kind'])}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(RULE_LABEL) as SpendingRule['kind'][]).map((k) => (
+                <SelectItem key={k} value={k}>
+                  {RULE_LABEL[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        {rule.kind !== 'planned' && (
+          <Field label="Starts">
+            <TimingInput value={rule.start} plan={draft} onChange={(t) => t && set({ spending: { ...rule, start: t } })} />
+          </Field>
+        )}
+      </div>
+      {rule.kind !== 'planned' && (
+        <div className="grid grid-cols-3 gap-3">
+          <Field label={rule.kind === 'percent' ? '% of the portfolio a year' : 'Initial % of the portfolio'}>
+            <PercentInput value={rule.rate} onChange={(v) => set({ spending: { ...rule, rate: v } })} />
+          </Field>
+          {rule.kind === 'guytonKlinger' && (
+            <>
+              <Field label="Guardrail, ± % of the initial rate">
+                <PercentInput value={rule.guardrail} onChange={(v) => set({ spending: { ...rule, guardrail: v } })} />
+              </Field>
+              <Field label="Cut or raise by, %">
+                <PercentInput value={rule.adjustment} onChange={(v) => set({ spending: { ...rule, adjustment: v } })} />
+              </Field>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

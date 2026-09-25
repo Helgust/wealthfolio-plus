@@ -107,5 +107,6 @@ export function milestoneUses(plan: Plan, m: Milestone): string[] {
     if (p.pension && at(p.pension.start)) uses.push(`${p.name}'s pension`);
   });
   plan.expenses.forEach((e) => (at(e.start) || at(e.end)) && uses.push(e.name));
+  if (plan.spending.kind !== 'planned' && at(plan.spending.start)) uses.push('the spending rule');
   return uses;
 }

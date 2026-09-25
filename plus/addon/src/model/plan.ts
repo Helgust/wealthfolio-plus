@@ -83,6 +83,30 @@ export const ExpenseSchema = z.object({
   end: TimingSchema.nullable(),
 });
 
+const share = z.number().finite().min(0).max(1);
+
+/**
+ * How much the household spends once the rule starts. The rule sets how much the portfolio (all
+ * modelled accounts) gives per year; discretionary spending is what the income and that
+ * withdrawal leave after essential expenses and taxes, and replaces the planned discretionary
+ * expenses. Essential expenses are always paid: they are the floor.
+ * planned — no rule, the expense list as is; percent — rate × the start-of-year portfolio;
+ * guytonKlinger — starts at rate × portfolio and grows with inflation, then cut by adjustment
+ * when it is above rate × (1 + guardrail) of the portfolio, raised by adjustment when below
+ * rate × (1 − guardrail).
+ */
+export const SpendingRuleSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('planned') }),
+  z.object({ kind: z.literal('percent'), start: TimingSchema, rate: z.number().finite().min(0).max(0.2) }),
+  z.object({
+    kind: z.literal('guytonKlinger'),
+    start: TimingSchema,
+    rate: z.number().finite().min(0).max(0.2),
+    guardrail: share,
+    adjustment: share,
+  }),
+]);
+
 /** Nominal expected returns by Spanish account type, fraction per year. */
 export const ReturnsSchema = z.object({
   /** Interest on CASH accounts — rendimientos del capital mobiliario */
@@ -167,6 +191,12 @@ const PlanObject = z
     /** From this owner age the pension plan is available for withdrawals */
     pensionAccessAge: z.number().int().min(50).max(80).default(65),
     milestones: z.array(MilestoneSchema).max(20).default([]),
+    spending: SpendingRuleSchema.default({ kind: 'planned' }),
+    /**
+     * Tax rules after the last known year: frozen as they are (Spanish thresholds are not indexed
+     * automatically) or indexed — money thresholds grow with the plan's inflation.
+     */
+    taxRules: z.enum(['frozen', 'indexed']).default('frozen'),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
     message: 'Joint filing needs two people',
@@ -179,6 +209,7 @@ export type Timing = z.infer<typeof TimingSchema>;
 export type Milestone = z.infer<typeof MilestoneSchema>;
 export type AutonomoIncome = z.infer<typeof AutonomoIncomeSchema>;
 export type PublicPension = z.infer<typeof PublicPensionSchema>;
+export type SpendingRule = z.infer<typeof SpendingRuleSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
 export type Expense = z.infer<typeof ExpenseSchema>;
@@ -226,5 +257,7 @@ export function defaultPlan(startYear: number): Plan {
     withdrawalOrder: [],
     pensionAccessAge: 65,
     milestones: [{ id: 'retirement', name: 'Retirement', trigger: { kind: 'age', person: 0, age: 65 } }],
+    spending: { kind: 'planned' },
+    taxRules: 'frozen',
   };
 }

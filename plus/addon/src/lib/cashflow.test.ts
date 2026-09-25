@@ -87,6 +87,27 @@ describe('cash flow of a year', () => {
     expectBalanced(rows, start);
   });
 
+  it('adds up under a Guyton–Klinger spending rule from retirement', () => {
+    const start: StartingPoint = {
+      netWorth: 400_000,
+      accounts: [cashAccount(50_000), investAccount('broker', 'brokerage', 20, 17_500, 200_000)],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      spending: {
+        kind: 'guytonKlinger',
+        start: { kind: 'milestone', id: 'retirement' },
+        rate: 0.05,
+        guardrail: 0.2,
+        adjustment: 0.1,
+      },
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows.some((r) => r.ruleWithdrawal !== null && r.discretionaryExpenses > 0)).toBe(true);
+    expectBalanced(rows, start);
+  });
+
   it('adds up when the accounts run out', () => {
     const start: StartingPoint = { netWorth: 5_000, accounts: [cashAccount(5_000)] };
     const p: Plan = {

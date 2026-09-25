@@ -1,10 +1,11 @@
 // Deterministic yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
-// milestones → account income and growth → autónomo income and RETA, public pensions → expenses →
-// IRPF → surplus through flows,
+// milestones → account income and growth → autónomo income and RETA, public pensions → expenses
+// (a spending rule sets the discretionary ones) → IRPF → surplus through flows,
 // or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
 // Amounts are nominal; deflator converts them to euros of the plan's first year.
 import {
   actividad,
+  indexRules,
   irpfAnual,
   irpfConjunta,
   minimoConjunta,
@@ -20,7 +21,7 @@ import {
   type Rentas,
 } from '../es-tax';
 import { isPension, type Owner } from '../model/accounts';
-import type { Filing, Plan } from '../model/plan';
+import type { Filing, Plan, SpendingRule } from '../model/plan';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
 import { isActive, reachMilestones } from './timing';
 
@@ -84,6 +85,8 @@ export interface LedgerRow {
   withdrawals: Balances;
   /** Deficit left when the accounts in the withdrawal order run out: cash goes negative */
   shortfall: number;
+  /** What the spending rule lets the portfolio give this year; null — no rule in force */
+  ruleWithdrawal: number | null;
   /** Price growth of positions; interest and dividends are paid out as investmentIncome instead */
   marketGrowth: number;
   balances: Balances;
@@ -195,14 +198,23 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
   }
   const sink = () => accounts.find((a) => a.id === sinkId)!;
   const reached = new Map<string, number>();
+  let lastRuleWithdrawal: number | null = null;
 
   for (let year = plan.startYear; year <= endYear(plan); year++) {
     const t = year - plan.startYear;
-    const rules = rulesForYear(year);
+    const rules = planRules(plan, year);
     const deflator = (1 + plan.inflation) ** t;
     const ages = plan.people.map((p) => year - p.birthYear);
     const prev = rows.at(-1);
     const reachedNow = reachMilestones(plan, year, prev ? prev.netWorth / prev.deflator : start.netWorth, reached);
+
+    const portfolio = Math.max(accounts.reduce((s, a) => s + accountValue(a), 0), 0);
+    const rule = plan.spending;
+    const ruleWithdrawal: number | null =
+      rule.kind !== 'planned' && isActive(rule.start, null, year, plan, reached)
+        ? spendingRuleWithdrawal(rule, portfolio, lastRuleWithdrawal, plan.inflation)
+        : null;
+    lastRuleWithdrawal = ruleWithdrawal;
 
     // Account income — on start-of-year value, then price growth.
     const base = plan.people.map(emptyRentas);
@@ -238,13 +250,14 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       asistencia: false,
     }));
 
-    // Household expenses — in first-year prices, growing with inflation.
+    // Household expenses — in first-year prices, growing with inflation. Under a spending rule
+    // the planned discretionary expenses give way to what the rule leaves (below).
     let essential = 0;
     let discretionary = 0;
     for (const e of plan.expenses) {
       if (!isActive(e.start, e.end, year, plan, reached)) continue;
       if (e.kind === 'essential') essential += e.amount * deflator;
-      else discretionary += e.amount * deflator;
+      else if (ruleWithdrawal === null) discretionary += e.amount * deflator;
     }
 
     const people: PersonYear[] = acts.map((act, i) => ({
@@ -261,11 +274,20 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     const businessExpenses = sum((p) => p.businessExpenses);
     const reta = sum((p) => p.cuotaReta);
     const publicPension = sum((p) => p.publicPension);
-    const cf0 =
+    let cf0 =
       revenue - businessExpenses - reta + publicPension - essential - discretionary + investmentIncome;
 
     const tax = (extra: PersonRentas[]) =>
       taxYear(plan, year, rules, filing, personas, acts, extra, carries, jointCarry);
+    const withDrawdown = (d: Drawdown) =>
+      base.map((b, i) => ({ ...b, ganancias: b.ganancias + d.ganancias[i], trabajo: b.trabajo + d.trabajo[i] }));
+    if (ruleWithdrawal !== null) {
+      // Discretionary = income + the rule's withdrawal − costs − essential − taxes (with the tax on
+      // that withdrawal), not below 0. The withdrawal itself happens below as for any deficit.
+      const d = drawdown(plan, withdrawalOrder(plan, accounts.map(cloneAccount)), ruleWithdrawal, ages);
+      discretionary = Math.max(cf0 + d.raised - tax(withDrawdown(d)).irpf, 0);
+      cf0 -= discretionary;
+    }
     let taxed = tax(base);
     let realizedGains = 0;
     let pensionContributions = 0;
@@ -324,13 +346,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       for (let iter = 0; iter < 100; iter++) {
         trial = accounts.map(cloneAccount);
         const d = drawdown(plan, withdrawalOrder(plan, trial), x, ages);
-        taxed = tax(
-          base.map((b, i) => ({
-            ...b,
-            ganancias: b.ganancias + d.ganancias[i],
-            trabajo: b.trabajo + d.trabajo[i],
-          })),
-        );
+        taxed = tax(withDrawdown(d));
         raised = d.raised;
         withdrawals = d.byKind;
         realizedGains = d.ganancias.reduce((s, g) => s + g, 0);
@@ -378,6 +394,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       deposits,
       withdrawals,
       shortfall,
+      ruleWithdrawal,
       marketGrowth,
       balances,
       cash: balances.cash,
@@ -388,6 +405,32 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     });
   }
   return { filing, rows, milestoneYears: Object.fromEntries(reached) };
+}
+
+/** Tax rules for the year under the plan's policy for years after the last known rules. */
+function planRules(plan: Plan, year: number): IrpfRules {
+  const known = rulesForYear(year);
+  if (plan.taxRules === 'frozen' || year <= known.year) return known;
+  return indexRules(known, (1 + plan.inflation) ** (year - known.year));
+}
+
+/**
+ * What a spending rule lets the portfolio give this year (nominal).
+ * @param last the rule's amount last year; null — the rule starts this year
+ */
+export function spendingRuleWithdrawal(
+  rule: Exclude<SpendingRule, { kind: 'planned' }>,
+  portfolio: number,
+  last: number | null,
+  inflation: number,
+): number {
+  if (rule.kind === 'percent' || last === null) return rule.rate * portfolio;
+  // Guyton–Klinger guardrails on the inflation-adjusted amount.
+  const w = last * (1 + inflation);
+  const current = portfolio > 0 ? w / portfolio : Infinity;
+  if (current > rule.rate * (1 + rule.guardrail)) return w * (1 - rule.adjustment);
+  if (current < rule.rate * (1 - rule.guardrail)) return w * (1 + rule.adjustment);
+  return w;
 }
 
 interface Drawdown {

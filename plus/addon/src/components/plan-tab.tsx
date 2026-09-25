@@ -111,6 +111,18 @@ export function PlanTab({ plan, result, accounts, currency, onEdit }: Props) {
 
       <PlanCard title="Household expenses" onEdit={() => onEdit('expenses')}>
         {plan.expenses.length === 0 && <Empty>No expenses.</Empty>}
+        {plan.spending.kind !== 'planned' && (
+          <Line
+            main={
+              <span className="font-medium">
+                {plan.spending.kind === 'percent'
+                  ? `Spending rule: ${formatPercent(plan.spending.rate)} of the portfolio`
+                  : `Spending rule: Guyton–Klinger from ${formatPercent(plan.spending.rate)}, ±${formatPercent(plan.spending.guardrail)} guardrails`}
+              </span>
+            }
+            detail={`from ${timingLabel(plan.spending.start, plan, years)}; replaces discretionary`}
+          />
+        )}
         {plan.expenses.map((e, i) => (
           <Line
             key={i}

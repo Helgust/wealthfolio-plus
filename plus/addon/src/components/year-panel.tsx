@@ -80,6 +80,12 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
       </SheetHeader>
       <div className="space-y-4 px-4 text-sm">
         {reached.length > 0 && <p>Milestone reached: {reached.join(', ')}</p>}
+        {row.ruleWithdrawal !== null && (
+          <p className="text-muted-foreground text-xs">
+            The spending rule lets the accounts give {v(row.ruleWithdrawal)}; discretionary spending is what is left
+            after essential expenses and taxes.
+          </p>
+        )}
         {groups.map(([title, items]) => (
           <section key={title} className="space-y-1">
             <h3 className="text-muted-foreground text-xs font-medium">{title}</h3>

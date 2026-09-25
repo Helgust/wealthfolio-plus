@@ -241,7 +241,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         </Tabs>
 
         <p className="text-muted-foreground text-xs">
-          Deterministic projection with constant returns. Tax rules after {lastRulesYear} are frozen at {lastRulesYear}.{' '}
+          Deterministic projection with constant returns. Tax rules after {lastRulesYear}:{' '}
+          {plan.taxRules === 'indexed' ? 'thresholds indexed to inflation' : `frozen at ${lastRulesYear}`}.{' '}
           <button className="underline" onClick={() => ctx.api.navigation.navigate(CHECKS_ROUTE)}>
             Sandbox checks
           </button>
