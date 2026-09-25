@@ -21,8 +21,8 @@ function plan(overrides: Partial<Plan> = {}): Plan {
 /** Retiree aged 70 with no income, spending amount per year. */
 function retiree(amount: number, overrides: Partial<Plan> = {}): Plan {
   return plan({
-    people: [{ name: 'R', birthYear: 1956, disability: 'ninguna', autonomo: null }],
-    expenses: [{ name: 'Living', amount, kind: 'essential', startYear: null, endYear: null }],
+    people: [{ name: 'R', birthYear: 1956, disability: 'ninguna', autonomo: null, pension: null }],
+    expenses: [{ name: 'Living', amount, kind: 'essential', start: null, end: null }],
     inflation: 0,
     ...overrides,
   });
@@ -74,7 +74,7 @@ describe('returns', () => {
 
 describe('surplus flows', () => {
   const worker = () =>
-    plan({ expenses: [{ name: 'L', amount: 10_000, kind: 'essential', startYear: null, endYear: null }] });
+    plan({ expenses: [{ name: 'L', amount: 10_000, kind: 'essential', start: null, end: null }] });
 
   it('without flows, the surplus stays in cash', () => {
     const [row] = runPlan(worker(), start(cashAccount(0), investAccount('fund', 'fund', 1, 0, 0))).rows;
@@ -99,7 +99,7 @@ describe('surplus flows', () => {
 
   it('PPES max = incremento autónomo + general limit, and lowers IRPF', () => {
     const p = worker();
-    p.people[0].autonomo = { revenue: 80_000, expenses: 5_000, growth: 0, untilAge: 65 };
+    p.people[0].autonomo = { revenue: 80_000, expenses: 5_000, growth: 0, start: null, end: { kind: 'age', person: 0, age: 65 } };
     p.flows = [{ accountId: 'pp', mode: 'max', amount: 0 }];
     const [row] = runPlan(p, start(cashAccount(0), investAccount('pp', 'ppes', 1, 0, 0))).rows;
     expect(row.pensionContributions).toBeCloseTo(4_250 + 1_500, 9);
@@ -115,7 +115,7 @@ describe('surplus flows', () => {
 
   it('PPI takes the general limit first; PPES gets only its incremento', () => {
     const p = worker();
-    p.people[0].autonomo = { revenue: 80_000, expenses: 5_000, growth: 0, untilAge: 65 };
+    p.people[0].autonomo = { revenue: 80_000, expenses: 5_000, growth: 0, start: null, end: { kind: 'age', person: 0, age: 65 } };
     p.flows = [
       { accountId: 'ppi', mode: 'max', amount: 0 },
       { accountId: 'ppes', mode: 'fixed', amount: 100_000 },
@@ -129,7 +129,7 @@ describe('surplus flows', () => {
   it('caps contributions at 30 % of rendimientos netos', () => {
     const p = worker();
     p.expenses = [];
-    p.people[0].autonomo = { revenue: 16_000, expenses: 2_000, growth: 0, untilAge: 65 };
+    p.people[0].autonomo = { revenue: 16_000, expenses: 2_000, growth: 0, start: null, end: { kind: 'age', person: 0, age: 65 } };
     p.flows = [{ accountId: 'pp', mode: 'max', amount: 0 }];
     const [row] = runPlan(p, start(cashAccount(0), investAccount('pp', 'ppes', 1, 0, 0))).rows;
     expect(row.pensionContributions).toBeCloseTo(0.3 * row.people[0].rendimientoNeto, 9);
@@ -175,7 +175,7 @@ describe('withdrawals', () => {
 
   it('splits a joint account gain between two individual filers', () => {
     const p = retiree(40_000);
-    p.people.push({ name: 'S', birthYear: 1956, disability: 'ninguna', autonomo: null });
+    p.people.push({ name: 'S', birthYear: 1956, disability: 'ninguna', autonomo: null, pension: null });
     const s = start(investAccount('etf', 'brokerage', 100, 1_000, 20_000, 'joint'));
     const [row] = runPlan(p, s).rows;
     const half = irpfAnual(rules, minimoPersonalFamiliar(persona(70), rules), {
@@ -186,7 +186,7 @@ describe('withdrawals', () => {
 
   it('pension plan is drawn only from the access age, taxed as trabajo', () => {
     const p = retiree(20_000, {
-      people: [{ name: 'R', birthYear: 1966, disability: 'ninguna', autonomo: null }],
+      people: [{ name: 'R', birthYear: 1966, disability: 'ninguna', autonomo: null, pension: null }],
     });
     const rows = runPlan(p, start(investAccount('pp', 'ppi', 1, 500_000, 300_000))).rows;
     const at = (age: number) => rows.find((r) => r.people[0].age === age)!;

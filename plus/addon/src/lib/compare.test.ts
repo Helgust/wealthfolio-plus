@@ -15,7 +15,7 @@ describe('plan comparison', () => {
   const base = runPlan(plan(), START).rows;
   const short = runPlan(plan({ endAge: 80 }), START).rows;
   const lavish = runPlan(
-    plan({ expenses: [{ name: 'All', amount: 60_000, kind: 'essential', startYear: null, endYear: null }] }),
+    plan({ expenses: [{ name: 'All', amount: 60_000, kind: 'essential', start: null, end: null }] }),
     START,
   ).rows;
 

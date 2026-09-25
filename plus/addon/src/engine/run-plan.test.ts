@@ -65,7 +65,7 @@ describe('runPlan', () => {
   it('respects expense start and end years', () => {
     const p = plan({
       expenses: [
-        { name: 'School', amount: 1_000, kind: 'discretionary', startYear: 2027, endYear: 2028 },
+        { name: 'School', amount: 1_000, kind: 'discretionary', start: { kind: 'year', year: 2027 }, end: { kind: 'year', year: 2029 } },
       ],
     });
     const rows = runPlan(p, START).rows;
@@ -80,7 +80,7 @@ describe('runPlan', () => {
   it('carries a loss forward to the next years', () => {
     const p = plan();
     // Margin grows 50 % a year while the RETA cuota stays nearly flat: a loss, then a profit.
-    p.people[0].autonomo = { revenue: 20_000, expenses: 18_000, growth: 0.5, untilAge: 65 };
+    p.people[0].autonomo = { revenue: 20_000, expenses: 18_000, growth: 0.5, start: null, end: { kind: 'age', person: 0, age: 65 } };
     const rows = runPlan(p, START).rows;
     let prev: ReturnType<typeof irpfAnual> | undefined;
     let compensado = 0;

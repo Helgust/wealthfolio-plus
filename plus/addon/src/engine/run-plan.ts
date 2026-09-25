@@ -1,5 +1,6 @@
 // Deterministic yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
-// account income and growth → autónomo income and RETA → expenses → IRPF → surplus through flows,
+// milestones → account income and growth → autónomo income and RETA, public pensions → expenses →
+// IRPF → surplus through flows,
 // or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
 // Amounts are nominal; deflator converts them to euros of the plan's first year.
 import {
@@ -21,6 +22,7 @@ import {
 import { isPension, type Owner } from '../model/accounts';
 import type { Filing, Plan } from '../model/plan';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
+import { isActive, reachMilestones } from './timing';
 
 /** Current finances from Wealthfolio at the plan start (base currency). */
 export interface StartingPoint {
@@ -37,6 +39,8 @@ export interface PersonYear {
   /** E.g. "general 3"; null — no autónomo income */
   retaTramo: string | null;
   rendimientoNeto: number;
+  /** Seguridad Social pension, gross */
+  publicPension: number;
 }
 
 export interface Balances {
@@ -52,6 +56,7 @@ export interface LedgerRow {
   revenue: number;
   businessExpenses: number;
   reta: number;
+  publicPension: number;
   irpfEstatal: number;
   irpfAutonomica: number;
   irpf: number;
@@ -77,11 +82,15 @@ export interface LedgerRow {
   netWorth: number;
   /** Nominal ÷ deflator = euros of the plan's first year */
   deflator: number;
+  /** Ids of the milestones reached in this year */
+  milestones: string[];
 }
 
 export interface PlanResult {
   filing: Filing;
   rows: LedgerRow[];
+  /** Year each reached milestone was reached (may be before the plan start) */
+  milestoneYears: Record<string, number>;
 }
 
 interface Carry {
@@ -173,12 +182,15 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     accounts.push({ id: SINK_ID, name: 'Cash', kind: 'cash', owner: 'joint', cash: 0, positions: [] });
   }
   const sink = () => accounts.find((a) => a.id === sinkId)!;
+  const reached = new Map<string, number>();
 
   for (let year = plan.startYear; year <= endYear(plan); year++) {
     const t = year - plan.startYear;
     const rules = rulesForYear(year);
     const deflator = (1 + plan.inflation) ** t;
     const ages = plan.people.map((p) => year - p.birthYear);
+    const prev = rows.at(-1);
+    const reachedNow = reachMilestones(plan, year, prev ? prev.netWorth / prev.deflator : start.netWorth, reached);
 
     // Account income — on start-of-year value, then price growth.
     const base = plan.people.map(emptyRentas);
@@ -194,13 +206,17 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       ownerShares(a.owner, n).forEach((s, i) => (base[i].rcm += income * s));
     }
 
-    // Autónomo income and RETA.
-    const acts = plan.people.map((p, i) => {
+    // Autónomo income and RETA; public pensions are rendimientos del trabajo.
+    const acts = plan.people.map((p) => {
       const inc = p.autonomo;
-      if (!inc || ages[i] >= inc.untilAge) return null;
+      if (!inc || !isActive(inc.start, inc.end, year, plan, reached)) return null;
       const g = (1 + inc.growth) ** t;
       return actividad(inc.revenue * g, inc.expenses * g, rules);
     });
+    const pensions = plan.people.map((p) =>
+      p.pension && isActive(p.pension.start, null, year, plan, reached) ? p.pension.amount * deflator : 0,
+    );
+    pensions.forEach((v, i) => (base[i].trabajo += v));
     const personas: Persona[] = plan.people.map((p, i) => ({
       edad: ages[i],
       discapacidad: p.disability,
@@ -211,9 +227,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     let essential = 0;
     let discretionary = 0;
     for (const e of plan.expenses) {
-      if ((e.startYear !== null && year < e.startYear) || (e.endYear !== null && year > e.endYear)) {
-        continue;
-      }
+      if (!isActive(e.start, e.end, year, plan, reached)) continue;
       if (e.kind === 'essential') essential += e.amount * deflator;
       else discretionary += e.amount * deflator;
     }
@@ -225,12 +239,15 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       cuotaReta: act?.cuota_reta ?? 0,
       retaTramo: act ? retaLabel(rules.reta.tramos[act.reta_tramo]) : null,
       rendimientoNeto: act?.rendimiento_neto ?? 0,
+      publicPension: pensions[i],
     }));
     const sum = (f: (p: PersonYear) => number) => people.reduce((s, p) => s + f(p), 0);
     const revenue = sum((p) => p.revenue);
     const businessExpenses = sum((p) => p.businessExpenses);
     const reta = sum((p) => p.cuotaReta);
-    const cf0 = revenue - businessExpenses - reta - essential - discretionary + investmentIncome;
+    const publicPension = sum((p) => p.publicPension);
+    const cf0 =
+      revenue - businessExpenses - reta + publicPension - essential - discretionary + investmentIncome;
 
     const tax = (extra: PersonRentas[]) =>
       taxYear(plan, year, rules, filing, personas, acts, extra, carries, jointCarry);
@@ -317,6 +334,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       revenue,
       businessExpenses,
       reta,
+      publicPension,
       irpfEstatal: d.reduce((s, x) => s + x.cuota_liquida.estatal, 0),
       irpfAutonomica: d.reduce((s, x) => s + x.cuota_liquida.autonomica, 0),
       irpf: taxed.irpf,
@@ -334,9 +352,10 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       otherAssets,
       netWorth: balances.cash + balances.fund + balances.brokerage + balances.pension + otherAssets,
       deflator,
+      milestones: reachedNow.map((m) => m.id),
     });
   }
-  return { filing, rows };
+  return { filing, rows, milestoneYears: Object.fromEntries(reached) };
 }
 
 interface Drawdown {

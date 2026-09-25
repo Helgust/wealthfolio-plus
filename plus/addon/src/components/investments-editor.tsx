@@ -28,7 +28,7 @@ const RETURN_FIELDS: [keyof Returns, string][] = [
   ['pensionGrowth', 'Pension plans growth'],
 ];
 
-const MODE_LABEL: Record<Flow['mode'], string> = {
+export const MODE_LABEL: Record<Flow['mode'], string> = {
   max: 'Max (pension: deductible limit)',
   fixed: 'Fixed per year',
   percent: '% of the rest',

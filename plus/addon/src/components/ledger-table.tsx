@@ -12,6 +12,7 @@ const COLUMNS: Column[] = [
   { label: 'Revenue', value: (r) => r.revenue },
   { label: 'Business expenses', value: (r) => r.businessExpenses },
   { label: 'RETA', value: (r) => r.reta },
+  { label: 'SS pension', value: (r) => r.publicPension },
   { label: 'Interest & dividends', value: (r) => r.investmentIncome },
   { label: 'Realized gains', value: (r) => r.realizedGains },
   { label: 'Pension payouts', value: (r) => r.pensionWithdrawals },

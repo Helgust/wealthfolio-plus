@@ -1,5 +1,5 @@
 // Plan page in the ProjectionLab layout: net worth chart, key metrics, tabs.
-// "Accounts", "Taxes" and "Table" work; Plan, Cash flow, Monte Carlo are stubs.
+// Cash flow and Monte Carlo are stubs.
 import { useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -24,9 +24,11 @@ import { AccountsTab } from '../components/accounts-tab';
 import { LedgerTable } from '../components/ledger-table';
 import { NetWorthChart } from '../components/net-worth-chart';
 import { PageMessage } from '../components/page-message';
-import { PlanEditor } from '../components/plan-editor';
+import { PlanEditor, type EditorSection } from '../components/plan-editor';
 import { PlanSwitcher } from '../components/plan-switcher';
+import { PlanTab } from '../components/plan-tab';
 import { TaxesTab } from '../components/taxes-tab';
+import { YearPanel } from '../components/year-panel';
 import { runPlan, type PlanResult } from '../engine/run-plan';
 import { availableYears } from '../es-tax';
 import { SETTINGS_KEY, usePlannerData } from '../hooks/use-planner-data';
@@ -67,7 +69,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
   const queryClient = useQueryClient();
   const { portfolio, settings, book, start, error, changePlans } = usePlannerData(ctx);
   const [mode, setMode] = useState<ValueMode>('nominal');
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<EditorSection | null>(null);
+  const [year, setYear] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const active = book && activeEntry(book);
@@ -81,7 +84,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
 
   async function save(next: Plan) {
     await changePlans((b) => savePlan(ctx.api.storage, b, active!.id, next));
-    setEditing(false);
+    setEditing(null);
   }
 
   async function run(op: (b: PlanBook) => Promise<PlanBook>) {
@@ -143,7 +146,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               <ToggleGroupItem value="nominal">Nominal</ToggleGroupItem>
               <ToggleGroupItem value="today">Today's euros</ToggleGroupItem>
             </ToggleGroup>
-            <Button size="sm" onClick={() => setEditing(true)}>
+            <Button size="sm" onClick={() => setEditing('all')}>
               <Pencil className="h-4 w-4" /> Edit plan
             </Button>
           </div>
@@ -191,11 +194,17 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
                 hint={`starts at ${formatMoney(startCash, currency)} (cash accounts)`}
               />
             </div>
-            <NetWorthChart rows={rows} currency={currency} mode={mode} />
+            <NetWorthChart
+              rows={rows}
+              currency={currency}
+              mode={mode}
+              milestoneNames={Object.fromEntries(plan.milestones.map((m) => [m.id, m.name]))}
+              onYearClick={setYear}
+            />
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="taxes">
+        <Tabs defaultValue="plan">
           <TabsList>
             <TabsTrigger value="plan">Plan</TabsTrigger>
             <TabsTrigger value="cashflow">Cash flow</TabsTrigger>
@@ -205,7 +214,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
           </TabsList>
           <TabsContent value="plan">
-            <Stub>Income, expense and milestone cards come in phase 3. Use “Edit plan” for now.</Stub>
+            <PlanTab plan={plan} result={result} accounts={start.accounts} currency={currency} onEdit={setEditing} />
           </TabsContent>
           <TabsContent value="cashflow">
             <Stub>Cash-flow Sankey comes in phase 3.</Stub>
@@ -240,9 +249,16 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
       <PlanEditor
         plan={plan}
         accounts={start.accounts}
-        open={editing}
-        onOpenChange={setEditing}
+        section={editing}
+        onClose={() => setEditing(null)}
         onSave={save}
+      />
+      <YearPanel
+        row={rows.find((r) => r.year === year) ?? null}
+        plan={plan}
+        currency={currency}
+        mode={mode}
+        onClose={() => setYear(null)}
       />
     </Page>
   );

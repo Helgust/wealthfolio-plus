@@ -75,10 +75,16 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
   const present = runs.filter((r): r is ComparedRun => r !== null);
   const common = present.length ? commonEndYear(present.map((r) => r.rows)) : 0;
   const metrics = runs.map((r) => (r ? planMetrics(r.rows, mode, common) : null));
+  // With equal horizons the end is the common year: no separate end rows.
+  const sameEnd = metrics.every((m) => !m || m.endYear === common);
   const rows: MetricRow[] = [
     { label: `Net worth in ${common}`, value: (m) => m.netWorthAtCommon, money: true, empty: '—' },
-    { label: 'Net worth at the end', value: (m) => m.endNetWorth, money: true, empty: '—' },
-    { label: 'Last year', value: (m) => m.endYear, money: false, empty: '—' },
+    ...(sameEnd
+      ? []
+      : [
+          { label: 'Net worth at the end', value: (m: PlanMetrics) => m.endNetWorth, money: true, empty: '—' },
+          { label: 'Last year', value: (m: PlanMetrics) => m.endYear, money: false, empty: '—' },
+        ]),
     { label: 'IRPF + RETA over the plan', value: (m) => m.taxes, money: true, empty: '—' },
     { label: 'Household expenses over the plan', value: (m) => m.spending, money: true, empty: '—' },
     { label: 'Cash runs out', value: (m) => m.cashRunsOut, money: false, empty: 'Never' },
