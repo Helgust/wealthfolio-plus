@@ -36,6 +36,14 @@ free -h && df -h /                                              # память �
 sudo ss -ltnp | grep -E ':(80|443|8089) '                       # кто держит 80/443, свободен ли 8089
 ```
 
+Если Docker нет (`docker: command not found`), поставить его и дать своему пользователю права на
+Docker — тогда форк запускается от этого же пользователя без `sudo`:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      # затем выйти из SSH и зайти снова
+```
+
 Что выяснить:
 
 - **Версия основного** — Settings → About. Форк построен на v3.8.0. Если основной новее, копия его
@@ -64,6 +72,7 @@ sudo ss -ltnp | grep -E ':(80|443|8089) '                       # кто дер�
 ```bash
 git clone -b plus https://github.com/Helgust/wealthfolio-plus.git ~/wealthfolio-plus
 cd ~/wealthfolio-plus
+git log -1 --oneline               # тот же коммит, что последний на ПК: иначе не было push
 docker build -t wealthfolio-plus:latest .
 docker tag wealthfolio-plus:latest wealthfolio-plus:$(git rev-parse --short HEAD)
 ```
@@ -152,7 +161,10 @@ volumes:
    удаляются, иначе SQLite применит их к новой базе.
 
 Если основной запущен не через официальный `compose.yml`, его папка данных может быть другой —
-посмотрите `docker inspect <основной> --format '{{json .Mounts}}'`.
+посмотрите `docker inspect <основной> --format '{{json .Mounts}}'`. Если основной вообще не в Docker
+(сервис systemd из готового архива `wealthfolio-server`), его папка данных — каталог из `WF_DB_PATH`
+в его `.env` (`systemctl cat <сервис>` покажет, где этот файл); бэкап берётся из подпапки `backups`
+обычным `cp` (или `sudo cp`) вместо `docker cp`.
 
 ## 5. Запуск
 
