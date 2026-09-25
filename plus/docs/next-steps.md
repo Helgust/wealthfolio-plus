@@ -89,6 +89,8 @@
 - Не собирать аддон (`pnpm build`) при запущенном `pnpm dev:server`: оба пишут в `dist`, и хост на
   время ловит «Failed to start add-on».
 - `pnpm test` в `plus/addon` — vitest (golden-фикстуры, движок); `pnpm type-check` — tsc.
+- В VS Code (Run and Debug, `.vscode/launch.json`): «Fork + addon (dev mode)» — `plus/scripts/dev.ps1`;
+  «Checks: addon + Python reference» — `plus/scripts/check.ps1`: vitest, tsc, pytest, ruff подряд.
 - Recharts 3: в `onClick` графика нет активного индекса (`activeLabel` — `undefined`,
   `activeTooltipIndex` — `null`), подсказка следует за наведением. Год под курсором запоминать
   в `onMouseMove`. Легенда хоста (`ChartLegendContent`) красит квадратик цветом `stroke` серии:

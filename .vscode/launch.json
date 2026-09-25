@@ -1,0 +1,24 @@
+{
+  // Fork: run Wealthfolio with the Planificador ES addon in dev mode, and the checks of plus/.
+  // What to check in each phase: plus/docs/wealthfolio-plan.md.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Addon dev server in its own window + Wealthfolio with hot reload of the addon.
+      // Data: %APPDATA%\com.helgust.wealthfolio-plus.dev.
+      "name": "Fork + addon (dev mode)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pwsh -NoProfile -File plus/scripts/dev.ps1",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      // vitest and tsc of the addon, pytest and ruff of the Python reference.
+      "name": "Checks: addon + Python reference",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pwsh -NoProfile -File plus/scripts/check.ps1",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
