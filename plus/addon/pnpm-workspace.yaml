@@ -1,0 +1,5 @@
+# Отдельный workspace: зависимости аддона не попадают в pnpm-lock.yaml Wealthfolio.
+packages: []
+
+ignoredBuiltDependencies:
+  - esbuild
