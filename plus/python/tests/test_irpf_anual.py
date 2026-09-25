@@ -1,4 +1,5 @@
-"""Шаг 4: reducciones (art. 32, 51–52), compensación de rentas (art. 49, 50.3), IRPF за год."""
+"""Шаг 4: reducciones (arts. 19.2.f, 20, 32, 51–52), compensación de rentas (art. 49, 50.3),
+IRPF за год."""
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ from planner.tax import (
     pendientes_vacios,
     reduccion_actividad,
     reduccion_prevision_social,
+    rendimiento_trabajo,
 )
 
 
@@ -183,6 +185,45 @@ def test_negative_general_base_carried_forward(comp):
     assert not g2.pendientes.any()
 
 
+# --- Trabajo sin cotizaciones: otros gastos (19.2.f) и reducción art. 20 ----------------
+
+
+@pytest.mark.parametrize(
+    ("integro", "otras", "gastos", "red"),
+    [
+        (10_000, 0, 2_000, 7_302),
+        (14_852, 0, 2_000, 7_302),  # 20.a — граница плато включительно
+        (16_000, 0, 2_000, 7_302 - 1.75 * (16_000 - 14_852)),  # 20.b
+        (17_673.52, 0, 2_000, 2_364.34),  # стык 20.b и 20.c
+        (18_500, 0, 2_000, 2_364.34 - 1.14 * (18_500 - 17_673.52)),  # 20.c
+        (19_747.5, 0, 2_000, 0),  # «inferiores a 19.747,5»
+        (40_000, 0, 2_000, 0),
+        (8_000, 6_500, 2_000, 6_000),  # прочие rentas ровно 6 500 € — ещё можно; saldo ≥ 0
+        (10_000, 6_500.01, 2_000, 0),  # больше 6 500 € — reducción нет
+        (10_000, -3_000, 2_000, 7_302),  # алгебраическая сумма: убыток не мешает
+        (1_500, 0, 1_500, 0),  # gastos не больше íntegro, saldo не отрицательный
+        (0, 0, 0, 0),
+    ],
+)
+def test_rendimiento_trabajo(r2026, integro, otras, gastos, red):
+    g, r, neto = rendimiento_trabajo(integro, otras, r2026.reducciones.trabajo)
+    assert g == pytest.approx(gastos)
+    assert r == pytest.approx(red)
+    assert neto == pytest.approx(integro - gastos - red)
+    assert neto >= 0
+
+
+def test_reduccion_trabajo_continuous_and_indexed(r2026):
+    t = r2026.reducciones.trabajo
+    x = np.linspace(0, 25_000, 2_501)
+    _, red, _ = rendimiento_trabajo(x, 0.0, t)
+    assert np.max(np.abs(np.diff(red))) < 1.75 * 10 + 1e-6  # без скачков на стыках
+    # Индексация: все пороги × f, наклоны прежние — форма сохраняется.
+    ti = r2026.indexed(1.1).reducciones.trabajo
+    _, red_i, _ = rendimiento_trabajo(x * 1.1, 0.0, ti)
+    assert red_i == pytest.approx(red * 1.1, abs=1e-6)
+
+
 # --- IRPF за год ------------------------------------------------------------------------
 
 
@@ -233,6 +274,21 @@ def test_irpf_anual_carries_loss_to_next_year(r2026, minimo):
     )
     assert y2.base_liquidable_general == 26_000
     assert y2.base_liquidable_ahorro == 2_000
+
+
+def test_irpf_anual_pension_payout_gets_trabajo_reductions(r2026, minimo):
+    res = irpf_anual(r2026, minimo, trabajo_integro=16_000)
+    assert res.gastos_trabajo == 2_000
+    assert res.reduccion_trabajo == pytest.approx(7_302 - 1.75 * 1_148)
+    assert res.base_imponible_general == pytest.approx(16_000 - 2_000 - res.reduccion_trabajo)
+
+
+def test_irpf_anual_trabajo_threshold_counts_actividad_before_art32(r2026, minimo):
+    # Прочие rentas = rendimiento actividad до reducción art. 32 + база сбережений.
+    res = irpf_anual(r2026, minimo, trabajo_integro=12_000, rendimiento_actividad=4_000, rcm=2_600)
+    assert res.reduccion_trabajo == 0
+    res = irpf_anual(r2026, minimo, trabajo_integro=12_000, rendimiento_actividad=4_000, rcm=2_500)
+    assert res.reduccion_trabajo == pytest.approx(7_302)
 
 
 def test_irpf_anual_vectorized(r2026, minimo):
@@ -304,6 +360,14 @@ def test_irpf_conjunta_actividad_reduction_on_unit_total(r2026, minimo):
     # 84.2: лимит art. 32.2.3º не умножается: считается по rentas всей unidad familiar.
     miembros = [RentasMiembro(rendimiento_actividad=7_000)] * 2
     assert irpf_conjunta(r2026, minimo, miembros).reduccion_actividad == 0
+
+
+def test_irpf_conjunta_trabajo_once_per_unit(r2026, minimo):
+    # Manual práctico 2025, cap. 3: 19.2.f «por unidad familiar», art. 20 — по сумме rendimientos.
+    miembros = [RentasMiembro(trabajo_integro=9_000), RentasMiembro(trabajo_integro=9_000)]
+    res = irpf_conjunta(r2026, minimo, miembros)
+    assert res.gastos_trabajo == 2_000
+    assert res.reduccion_trabajo == pytest.approx(2_364.34 - 1.14 * (18_000 - 17_673.52))
 
 
 def test_irpf_conjunta_vectorized(r2026, minimo):

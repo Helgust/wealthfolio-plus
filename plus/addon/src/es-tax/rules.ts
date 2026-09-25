@@ -82,6 +82,24 @@ export interface ReduccionesActividad {
   inicio_actividad: { rate: number; base_max: number };
 }
 
+/** Art. 20 LIRPF: плато, затем два линейных спада до 0 на rend_max. */
+export interface ReduccionTrabajo {
+  rend_max: number;
+  otras_rentas_max: number;
+  plano_hasta: number;
+  importe: number;
+  pendiente: number;
+  quiebra: number;
+  importe_quiebra: number;
+  pendiente_quiebra: number;
+}
+
+/** Rendimientos del trabajo: otros gastos (art. 19.2.f) и reducción art. 20. */
+export interface Trabajo {
+  otros_gastos: number;
+  reduccion: ReduccionTrabajo;
+}
+
 export interface PrevisionSocial {
   limite_general: number;
   incremento_autonomo: number;
@@ -101,6 +119,7 @@ export interface IrpfRules {
   actividad: ActividadRules;
   reducciones: {
     actividad: ReduccionesActividad;
+    trabajo: Trabajo;
     prevision_social: PrevisionSocial;
     compensacion: Compensacion;
     tributacion_conjunta: { reduccion_biparental: number };

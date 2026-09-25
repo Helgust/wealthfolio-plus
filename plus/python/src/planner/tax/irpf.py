@@ -13,7 +13,11 @@ from planner.tax.compensacion import (
     pendientes_vacios,
 )
 from planner.tax.minimos import Discapacidad, Mitades
-from planner.tax.reducciones import reduccion_actividad, reduccion_prevision_social
+from planner.tax.reducciones import (
+    reduccion_actividad,
+    reduccion_prevision_social,
+    rendimiento_trabajo,
+)
 from planner.tax.rules import IrpfRules
 from planner.tax.scale import Scale
 
@@ -71,6 +75,8 @@ class IrpfAnual:
 
     rendimiento_actividad: float  # rendimiento neto до reducciones art. 32
     reduccion_actividad: float
+    gastos_trabajo: float  # otros gastos art. 19.2.f с trabajo_integro
+    reduccion_trabajo: float  # art. 20 с trabajo_integro
     base_imponible_general: float
     base_imponible_ahorro: float
     compensado_ahorro_anteriores: float  # убытки прошлых лет, списанные в этом году
@@ -93,6 +99,7 @@ def irpf_anual(
     *,
     rendimiento_actividad=0.0,
     rendimientos_trabajo=0.0,
+    trabajo_integro=0.0,
     otras_rentas_general=0.0,
     rcm=0.0,
     ganancias=0.0,
@@ -109,7 +116,11 @@ def irpf_anual(
 
     rendimiento_actividad — rendimiento neto autónomo (`planner.tax.actividad`); при
     dependiente=True он должен быть посчитан без gastos de difícil justificación.
-    rendimientos_trabajo — rendimientos netos del trabajo (в т. ч. выплаты из plan de pensiones).
+    rendimientos_trabajo — rendimientos netos reducidos del trabajo, уже после arts. 19–20
+    (как в декларации).
+    trabajo_integro — rendimientos íntegros del trabajo без взносов в Seguridad Social: выплаты
+    планов пенсий, пенсии. Из них вычитаются otros gastos (19.2.f) и reducción art. 20; порог
+    art. 20 считается только по ним, поэтому с rendimientos_trabajo их не смешивать.
     otras_rentas_general — прочее в общей базе (например, rendimiento inmobiliario).
     rcm, ganancias — saldos базы сбережений года (могут быть < 0).
     deducciones — сумма deducciones по половинам (estatal / autonómica), вводит пользователь.
@@ -118,10 +129,9 @@ def irpf_anual(
     Не моделируется: reducción art. 32.1 (rentas irregulares), ganancias в общей базе,
     перенос неиспользованных aportaciones (art. 52.2), pensiones compensatorias (art. 55).
     """
-    trabajo = np.asarray(rendimientos_trabajo, dtype=float)
     ps = rules.reducciones.prevision_social
 
-    def prevision(rn_reducido):
+    def prevision(rn_reducido, trabajo):
         return reduccion_prevision_social(
             aportacion_pensiones, aportacion_pensiones_autonomo, rn_reducido + trabajo, ps
         )
@@ -130,7 +140,8 @@ def irpf_anual(
         rules,
         minimo,
         rendimiento_actividad=rendimiento_actividad,
-        rendimientos_trabajo=trabajo,
+        rendimientos_trabajo=rendimientos_trabajo,
+        trabajo_integro=trabajo_integro,
         otras_rentas_general=otras_rentas_general,
         rcm=rcm,
         ganancias=ganancias,
@@ -151,6 +162,7 @@ class RentasMiembro:
 
     rendimiento_actividad: float = 0.0
     rendimientos_trabajo: float = 0.0
+    trabajo_integro: float = 0.0
     otras_rentas_general: float = 0.0
     rcm: float = 0.0
     ganancias: float = 0.0
@@ -178,20 +190,25 @@ def irpf_conjunta(
     база уменьшается на reduccion_biparental (84.2.3º). minimo — из `minimo_conjunta`.
     dependiente, discapacidad, inicio_actividad — для reducción art. 32 всей unidad familiar.
     pendientes_* — общий перенос убытков unidad familiar (84.3).
+    trabajo_integro — один otros gastos 19.2.f и одна reducción art. 20 на сумму unidad familiar
+    (84.2; Manual práctico 2025, cap. 3: «se aplican por unidad familiar», reducción — «en
+    función de la cuantía conjunta» без умножения на число членов).
     """
     ps = rules.reducciones.prevision_social
 
     def total(campo: str):
         return sum(np.asarray(getattr(m, campo), dtype=float) for m in miembros)
 
-    def prevision(_rn_reducido):
+    def prevision(_rn_reducido, _trabajo):
         # TODO: verify — 30 % (art. 52.1.a) считаем от собственных rendimientos каждого
-        # супруга без reducción art. 32: в conjunta она одна на всю unidad familiar.
+        # супруга без reducciones arts. 20 и 32: в conjunta они одни на всю unidad familiar.
         return sum(
             reduccion_prevision_social(
                 m.aportacion_pensiones,
                 m.aportacion_pensiones_autonomo,
-                np.asarray(m.rendimiento_actividad, dtype=float) + m.rendimientos_trabajo,
+                np.asarray(m.rendimiento_actividad, dtype=float)
+                + m.rendimientos_trabajo
+                + m.trabajo_integro,
                 ps,
             )
             for m in miembros
@@ -202,6 +219,7 @@ def irpf_conjunta(
         minimo,
         rendimiento_actividad=total("rendimiento_actividad"),
         rendimientos_trabajo=total("rendimientos_trabajo"),
+        trabajo_integro=total("trabajo_integro"),
         otras_rentas_general=total("otras_rentas_general"),
         rcm=total("rcm"),
         ganancias=total("ganancias"),
@@ -222,6 +240,7 @@ def _irpf(
     *,
     rendimiento_actividad,
     rendimientos_trabajo,
+    trabajo_integro,
     otras_rentas_general,
     rcm,
     ganancias,
@@ -234,8 +253,8 @@ def _irpf(
     pendientes_general,
     pendientes_ahorro,
 ) -> IrpfAnual:
-    """Общий расчёт individual и conjunta. prevision(rn_reducido) — reducción por planes
-    de pensiones до ограничения базой; reduccion_conjunta — art. 84.2.3º (0 в individual)."""
+    """Общий расчёт individual и conjunta. prevision(rn_reducido, trabajo) — reducción por
+    planes de pensiones до ограничения базой; reduccion_conjunta — art. 84.2.3º (0 в individual)."""
     r = rules.reducciones
     if pendientes_general is None:
         pendientes_general = pendientes_vacios(r.compensacion, ahorro=False)
@@ -245,7 +264,12 @@ def _irpf(
         deducciones = Mitades(estatal=0.0, autonomica=0.0)
 
     rn = np.asarray(rendimiento_actividad, dtype=float)
-    trabajo = np.asarray(rendimientos_trabajo, dtype=float)
+    # Порог art. 20 — алгебраическая сумма прочих rentas, actividades без reducciones art. 32
+    # (Manual práctico 2025, cap. 3, fase 3).
+    gastos_trab, red_trab, trabajo_reducido = rendimiento_trabajo(
+        trabajo_integro, rn + otras_rentas_general + rcm + ganancias, r.trabajo
+    )
+    trabajo = np.asarray(rendimientos_trabajo, dtype=float) + trabajo_reducido
     otras_rentas = (
         np.maximum(trabajo, 0.0)
         + np.maximum(otras_rentas_general, 0.0)
@@ -272,7 +296,8 @@ def _irpf(
     big_reducida = big - conj_general
 
     # Art. 50.1: reducciones не могут сделать базу отрицательной.
-    red_ps = np.minimum(prevision(rn_reducido), np.maximum(big_reducida, 0.0))
+    # TODO: verify — 30 % (art. 52.1.a) от trabajo после reducción art. 20, как у actividad.
+    red_ps = np.minimum(prevision(rn_reducido, trabajo), np.maximum(big_reducida, 0.0))
     general = compensar_base_liquidable_general(
         big_reducida - red_ps, pendientes_general, r.compensacion
     )
@@ -288,6 +313,8 @@ def _irpf(
     return IrpfAnual(
         rendimiento_actividad=_out(rn),
         reduccion_actividad=red_act,
+        gastos_trabajo=gastos_trab,
+        reduccion_trabajo=red_trab,
         base_imponible_general=_out(big),
         base_imponible_ahorro=ahorro.base_imponible,
         compensado_ahorro_anteriores=ahorro.compensado_anteriores,

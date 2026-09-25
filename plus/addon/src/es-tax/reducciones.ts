@@ -1,12 +1,43 @@
-// Порт planner.tax.reducciones: reducciones общей базы (art. 32, arts. 51–52 LIRPF).
+// Порт planner.tax.reducciones: reducciones общей базы (arts. 19.2.f, 20, 32, 51–52 LIRPF).
 import type { Discapacidad } from './minimos';
-import type { PrevisionSocial, ReduccionesActividad, TramoDecreciente } from './rules';
+import type { PrevisionSocial, ReduccionesActividad, Trabajo, TramoDecreciente } from './rules';
 
 const clip = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), hi);
 
 /** importe до plano_hasta, затем линейно убывает до 0. */
 function tramoDecreciente(x: number, t: TramoDecreciente): number {
   return clip(t.importe - t.pendiente * Math.max(x - t.plano_hasta, 0), 0, t.importe);
+}
+
+export interface RendimientoTrabajo {
+  otros_gastos: number;
+  reduccion: number;
+  neto_reducido: number;
+}
+
+/**
+ * Rendimiento neto reducido del trabajo без взносов в Seguridad Social (выплаты планов пенсий,
+ * пенсии): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20). otrasRentas —
+ * алгебраическая сумма прочих rentas no exentas (порог art. 20).
+ */
+export function rendimientoTrabajo(
+  integro: number,
+  otrasRentas: number,
+  rules: Trabajo,
+): RendimientoTrabajo {
+  const positivo = Math.max(integro, 0);
+  const gastos = Math.min(rules.otros_gastos, positivo);
+  const r = rules.reduccion;
+  let red =
+    integro <= r.plano_hasta
+      ? r.importe
+      : integro <= r.quiebra
+        ? r.importe - r.pendiente * (integro - r.plano_hasta)
+        : r.importe_quiebra - r.pendiente_quiebra * (integro - r.quiebra);
+  if (!(integro < r.rend_max && otrasRentas <= r.otras_rentas_max)) red = 0;
+  // Art. 20: saldo после reducción не может быть отрицательным.
+  red = clip(red, 0, positivo - gastos);
+  return { otros_gastos: gastos, reduccion: red, neto_reducido: integro - gastos - red };
 }
 
 export interface ReduccionActividadOpts {

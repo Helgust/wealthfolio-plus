@@ -241,6 +241,41 @@ class PrevisionSocial(_Frozen):
         return _scaled(self, f, "limite_general", "incremento_autonomo")
 
 
+class ReduccionTrabajo(_Frozen):
+    """Art. 20 LIRPF: три участка — плато, затем два линейных спада до 0 на rend_max."""
+
+    rend_max: float
+    otras_rentas_max: float
+    plano_hasta: float
+    importe: float
+    pendiente: float
+    quiebra: float
+    importe_quiebra: float
+    pendiente_quiebra: float
+
+
+class Trabajo(_Frozen):
+    """Rendimientos del trabajo: otros gastos (art. 19.2.f) и reducción art. 20."""
+
+    otros_gastos: float
+    reduccion: ReduccionTrabajo
+
+    def indexed(self, f: float) -> Trabajo:
+        return Trabajo(
+            otros_gastos=self.otros_gastos * f,
+            reduccion=_scaled(
+                self.reduccion,
+                f,
+                "rend_max",
+                "otras_rentas_max",
+                "plano_hasta",
+                "importe",
+                "quiebra",
+                "importe_quiebra",
+            ),
+        )
+
+
 class Compensacion(_Frozen):
     """Compensación de rentas negativas (arts. 48–50)."""
 
@@ -256,6 +291,7 @@ class TributacionConjunta(_Frozen):
 
 class Reducciones(_Frozen):
     actividad: ReduccionesActividad
+    trabajo: Trabajo
     prevision_social: PrevisionSocial
     compensacion: Compensacion
     tributacion_conjunta: TributacionConjunta
@@ -263,6 +299,7 @@ class Reducciones(_Frozen):
     def indexed(self, f: float) -> Reducciones:
         return Reducciones(
             actividad=self.actividad.indexed(f),
+            trabajo=self.trabajo.indexed(f),
             prevision_social=self.prevision_social.indexed(f),
             compensacion=self.compensacion,
             tributacion_conjunta=_scaled(self.tributacion_conjunta, f, "reduccion_biparental"),

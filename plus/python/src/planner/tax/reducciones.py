@@ -1,4 +1,5 @@
-"""Reducciones общей базы: по rendimientos de actividades (art. 32) и планам пенсий (arts. 51–52).
+"""Reducciones общей базы: rendimientos del trabajo (arts. 19.2.f, 20), actividades (art. 32),
+планы пенсий (arts. 51–52).
 
 Аргументы — числа или numpy-массивы одинаковой формы (траектории).
 """
@@ -8,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from planner.tax.minimos import Discapacidad
-from planner.tax.rules import PrevisionSocial, ReduccionesActividad
+from planner.tax.rules import PrevisionSocial, ReduccionesActividad, Trabajo
 
 
 def _out(x):
@@ -18,6 +19,34 @@ def _out(x):
 def _tramo_decreciente(x, plano_hasta: float, importe: float, pendiente: float):
     """importe до plano_hasta, затем линейно убывает до 0."""
     return np.clip(importe - pendiente * np.maximum(x - plano_hasta, 0.0), 0.0, importe)
+
+
+def rendimiento_trabajo(integro, otras_rentas, rules: Trabajo):
+    """Rendimiento neto reducido del trabajo без взносов в Seguridad Social (выплаты планов
+    пенсий, пенсии): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20).
+
+    otras_rentas — алгебраическая сумма прочих rentas no exentas (для порога art. 20).
+    Возвращает (otros_gastos, reduccion, neto_reducido). Gastos 19.2.a–e для этих доходов нулевые,
+    поэтому rendimiento для порогов art. 20 равен íntegro.
+    """
+    integro = np.asarray(integro, dtype=float)
+    otras = np.asarray(otras_rentas, dtype=float)
+    positivo = np.maximum(integro, 0.0)
+    gastos = np.minimum(rules.otros_gastos, positivo)
+    r = rules.reduccion
+    red = np.where(
+        integro <= r.plano_hasta,
+        r.importe,
+        np.where(
+            integro <= r.quiebra,
+            r.importe - r.pendiente * (integro - r.plano_hasta),
+            r.importe_quiebra - r.pendiente_quiebra * (integro - r.quiebra),
+        ),
+    )
+    red = np.where((integro < r.rend_max) & (otras <= r.otras_rentas_max), red, 0.0)
+    # Art. 20: saldo после reducción не может быть отрицательным.
+    red = np.clip(red, 0.0, positivo - gastos)
+    return _out(gastos), _out(red), _out(integro - gastos - red)
 
 
 def reduccion_actividad(

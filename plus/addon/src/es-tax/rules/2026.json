@@ -216,6 +216,19 @@
     "base_max": 100000.0
    }
   },
+  "trabajo": {
+   "otros_gastos": 2000.0,
+   "reduccion": {
+    "rend_max": 19747.5,
+    "otras_rentas_max": 6500.0,
+    "plano_hasta": 14852.0,
+    "importe": 7302.0,
+    "pendiente": 1.75,
+    "quiebra": 17673.52,
+    "importe_quiebra": 2364.34,
+    "pendiente_quiebra": 1.14
+   }
+  },
   "prevision_social": {
    "limite_general": 1500.0,
    "incremento_autonomo": 4250.0,

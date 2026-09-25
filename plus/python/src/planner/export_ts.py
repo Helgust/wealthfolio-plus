@@ -154,6 +154,28 @@ def _individual_cases(year: int, rules) -> list[dict]:
                 "expected": _irpf_out(res),
             }
         )
+    # Выплаты планов пенсий и пенсии: otros gastos 19.2.f и reducción art. 20 по ступеням.
+    conts = [Persona(edad=70, discapacidad=Discapacidad.GRADO_33)]
+    minimo = minimo_personal_familiar(conts[0], rules)
+    for integro, rn, (rcm, gan) in product(
+        (1_500.0, 9_000.0, 14_852.0, 16_500.0, 18_500.0, 30_000.0), (0.0, 3_000.0), AHORRO
+    ):
+        kwargs = {
+            "trabajo_integro": integro,
+            "rendimiento_actividad": rn,
+            "rcm": rcm,
+            "ganancias": gan,
+        }
+        res = irpf_anual(rules, minimo, **kwargs)
+        cases.append(
+            {
+                "year": year,
+                "hogar": "solo_70_disc",
+                "hogar_input": _hogar_json(conts, [], []),
+                "input": kwargs,
+                "expected": _irpf_out(res),
+            }
+        )
     # Особые режимы: dependiente, inicio_actividad, deducciones.
     minimo = minimo_personal_familiar(Persona(edad=40), rules)
     for rn, flags in product(
@@ -221,6 +243,7 @@ def _conjunta_cases(year: int, rules) -> list[dict]:
             RentasMiembro(
                 rendimiento_actividad=actividad(ing2, ing2 * 0.3, rules).rendimiento_neto,
                 aportacion_pensiones_autonomo=4_000.0,
+                trabajo_integro=9_000.0 if ing2 == 0 else 0.0,
             ),
         ]
         res = irpf_conjunta(rules, minimo, miembros)

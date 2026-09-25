@@ -28,7 +28,11 @@ from planner.tax.minimos import (
     minimo_conjunta,
     minimo_personal_familiar,
 )
-from planner.tax.reducciones import reduccion_actividad, reduccion_prevision_social
+from planner.tax.reducciones import (
+    reduccion_actividad,
+    reduccion_prevision_social,
+    rendimiento_trabajo,
+)
 from planner.tax.rules import (
     ActividadRules,
     IrpfRules,
@@ -73,6 +77,7 @@ __all__ = [
     "reduccion_actividad",
     "reduccion_prevision_social",
     "rendimiento_neto",
+    "rendimiento_trabajo",
     "reta_tramo",
     "rules_for_year",
 ]

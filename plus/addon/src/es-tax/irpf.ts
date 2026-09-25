@@ -8,7 +8,7 @@ import {
   type PendientesGeneral,
 } from './compensacion';
 import type { Discapacidad, Mitades } from './minimos';
-import { reduccionActividad, reduccionPrevisionSocial } from './reducciones';
+import { reduccionActividad, reduccionPrevisionSocial, rendimientoTrabajo } from './reducciones';
 import type { IrpfRules, Scale } from './rules';
 import { applyScale } from './scale';
 
@@ -50,6 +50,8 @@ export function cuotaIntegra(
 export interface IrpfAnual {
   rendimiento_actividad: number; // rendimiento neto до reducciones art. 32
   reduccion_actividad: number;
+  gastos_trabajo: number; // otros gastos art. 19.2.f с trabajo_integro
+  reduccion_trabajo: number; // art. 20 с trabajo_integro
   base_imponible_general: number;
   base_imponible_ahorro: number;
   compensado_ahorro_anteriores: number;
@@ -69,7 +71,13 @@ export interface IrpfAnual {
 /** Rentas одного налогоплательщика (или супруга в conjunta). Смысл — как в Python-эталоне. */
 export interface Rentas {
   rendimiento_actividad?: number;
+  /** Rendimientos netos reducidos del trabajo — уже после arts. 19–20, как в декларации */
   rendimientos_trabajo?: number;
+  /**
+   * Rendimientos íntegros del trabajo без взносов в Seguridad Social: выплаты планов пенсий,
+   * пенсии. К ним применяются 19.2.f и art. 20; с rendimientos_trabajo не смешивать.
+   */
+  trabajo_integro?: number;
   otras_rentas_general?: number;
   rcm?: number; // saldo, может быть < 0
   ganancias?: number; // saldo, может быть < 0
@@ -93,9 +101,8 @@ export function irpfAnual(
   rentas: Rentas,
   opts: IrpfOpts = {},
 ): IrpfAnual {
-  const trabajo = rentas.rendimientos_trabajo ?? 0;
   const ps = rules.reducciones.prevision_social;
-  return irpf(rules, minimo, rentas, opts, 0, (rnReducido) =>
+  return irpf(rules, minimo, rentas, opts, 0, (rnReducido, trabajo) =>
     reduccionPrevisionSocial(
       rentas.aportacion_pensiones ?? 0,
       rentas.aportacion_pensiones_autonomo ?? 0,
@@ -121,11 +128,14 @@ export function irpfConjunta(
   const rentas: Rentas = {
     rendimiento_actividad: suma('rendimiento_actividad'),
     rendimientos_trabajo: suma('rendimientos_trabajo'),
+    trabajo_integro: suma('trabajo_integro'),
     otras_rentas_general: suma('otras_rentas_general'),
     rcm: suma('rcm'),
     ganancias: suma('ganancias'),
   };
-  // TODO: verify — 30 % (art. 52.1.a) от собственных rendimientos супруга без reducción art. 32.
+  // TODO: verify — 30 % (art. 52.1.a) от собственных rendimientos супруга без reducciones
+  // arts. 20 и 32: в conjunta они одни на всю unidad familiar. 19.2.f и art. 20 — тоже одни
+  // на unidad familiar (Manual práctico 2025, cap. 3).
   const prevision = () =>
     miembros.reduce(
       (s, m) =>
@@ -133,7 +143,7 @@ export function irpfConjunta(
         reduccionPrevisionSocial(
           m.aportacion_pensiones ?? 0,
           m.aportacion_pensiones_autonomo ?? 0,
-          (m.rendimiento_actividad ?? 0) + (m.rendimientos_trabajo ?? 0),
+          (m.rendimiento_actividad ?? 0) + (m.rendimientos_trabajo ?? 0) + (m.trabajo_integro ?? 0),
           ps,
         ),
       0,
@@ -148,7 +158,7 @@ function irpf(
   rentas: Rentas,
   opts: IrpfOpts,
   reduccionConjunta: number,
-  prevision: (rnReducido: number) => number,
+  prevision: (rnReducido: number, trabajo: number) => number,
 ): IrpfAnual {
   const r = rules.reducciones;
   const pendGeneral = opts.pendientes_general ?? pendientesVaciosGeneral(r.compensacion);
@@ -156,10 +166,17 @@ function irpf(
   const deducciones = opts.deducciones ?? { estatal: 0, autonomica: 0 };
 
   const rn = rentas.rendimiento_actividad ?? 0;
-  const trabajo = rentas.rendimientos_trabajo ?? 0;
   const otrasGeneral = rentas.otras_rentas_general ?? 0;
   const rcm = rentas.rcm ?? 0;
   const ganancias = rentas.ganancias ?? 0;
+  // Порог art. 20 — алгебраическая сумма прочих rentas, actividades без reducciones art. 32
+  // (Manual práctico 2025, cap. 3, fase 3).
+  const trab = rendimientoTrabajo(
+    rentas.trabajo_integro ?? 0,
+    rn + otrasGeneral + rcm + ganancias,
+    r.trabajo,
+  );
+  const trabajo = (rentas.rendimientos_trabajo ?? 0) + trab.neto_reducido;
   const otrasRentas =
     Math.max(trabajo, 0) + Math.max(otrasGeneral, 0) + Math.max(rcm, 0) + Math.max(ganancias, 0);
   const redAct = reduccionActividad(rn, r.actividad, {
@@ -180,7 +197,8 @@ function irpf(
   const bigReducida = big - conjGeneral;
 
   // Art. 50.1: reducciones не могут сделать базу отрицательной.
-  const redPs = Math.min(prevision(rnReducido), Math.max(bigReducida, 0));
+  // TODO: verify — 30 % (art. 52.1.a) от trabajo после reducción art. 20, как у actividad.
+  const redPs = Math.min(prevision(rnReducido, trabajo), Math.max(bigReducida, 0));
   const general = compensarBaseLiquidableGeneral(bigReducida - redPs, pendGeneral);
 
   const blg = general.base_liquidable;
@@ -189,6 +207,8 @@ function irpf(
   return {
     rendimiento_actividad: rn,
     reduccion_actividad: redAct,
+    gastos_trabajo: trab.otros_gastos,
+    reduccion_trabajo: trab.reduccion,
     base_imponible_general: big,
     base_imponible_ahorro: ahorro.base_imponible,
     compensado_ahorro_anteriores: ahorro.compensado_anteriores,
