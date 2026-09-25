@@ -14,10 +14,12 @@
         "id": "planificador-es"
       },
       {
-        "id": "planificador-es-compare"
+        "id": "planificador-es-compare",
+        "path": "compare"
       },
       {
-        "id": "planificador-es-checks"
+        "id": "planificador-es-checks",
+        "path": "checks"
       }
     ],
     "links": {
