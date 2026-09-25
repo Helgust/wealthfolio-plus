@@ -187,10 +187,17 @@ DNS: запись A `money-dev` → IP вашего VPS.
 - без буферизации ответа — фронтенд держит долгое соединение с событиями (SSE);
 - `WF_CORS_ALLOW_ORIGINS` в `.env` — ровно этот адрес с `https://`.
 
-**Домен за Cloudflare.** Запись `money-dev` заводится в DNS Cloudflare с включённым проксированием
-(оранжевое облако), как у основного сайта. Бесплатный сертификат Cloudflare покрывает поддомены
-первого уровня (`money-dev.example.com`), но не второго (`money.dev.example.com`); certbot не нужен.
-Дальше смотрите режим SSL/TLS зоны:
+**Домен в Cloudflare.** Запись `money-dev` заводится в DNS Cloudflare так же, как запись основного
+сайта. Проксирование (оранжевое облако) нужно, только если сертификат — от самого Cloudflare:
+Universal SSL живёт на серверах Cloudflare, а Origin Certificate на VPS браузеры напрямую не
+принимают. Если на VPS свой публично доверенный сертификат (например, wildcard от Let's Encrypt,
+выпущенный через DNS Cloudflare), подойдёт и серое облако (DNS only): браузер пойдёт прямо на VPS,
+nginx — с тем же сертификатом, что у основного сайта, и `X-Forwarded-Proto $scheme`. Кто выпустил
+сертификат: `openssl x509 -in <файл сертификата> -noout -issuer`.
+
+Дальше — для оранжевого облака. Бесплатный сертификат Cloudflare покрывает поддомены первого уровня
+(`money-dev.example.com`), но не второго (`money.dev.example.com`); certbot не нужен. Смотрите режим
+SSL/TLS зоны:
 
 - **Full (strict)** или **Full** — на VPS стоит сертификат для связи Cloudflare → VPS (обычно Origin
   Certificate на `*.example.com`). В блоке nginx ниже вместо `listen 80` поставьте `listen 443 ssl`
