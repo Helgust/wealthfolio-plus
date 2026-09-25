@@ -1,0 +1,94 @@
+// TS-порт против Python-эталона: fixtures/golden.json выгружает `python -m planner.export_ts`.
+import { describe, expect, it } from 'vitest';
+import golden from './fixtures/golden.json';
+import {
+  actividad,
+  irpfAnual,
+  irpfConjunta,
+  loadIrpfRules,
+  minimoConjunta,
+  minimoPersonalFamiliar,
+  type Familiar,
+  type IrpfOpts,
+  type Persona,
+  type Rentas,
+} from './index';
+
+const TOL = 0.01; // евро
+
+interface Hogar {
+  contribuyentes: Persona[];
+  descendientes: Familiar[];
+  ascendientes: Familiar[];
+}
+
+/** Рекурсивно сравнивает числа с допуском; возвращает путь первого расхождения. */
+function diff(got: unknown, want: unknown, path = ''): string | null {
+  if (typeof want === 'number') {
+    return typeof got === 'number' && Math.abs(got - want) <= TOL
+      ? null
+      : `${path}: got ${String(got)}, want ${want}`;
+  }
+  if (want !== null && typeof want === 'object') {
+    for (const [k, v] of Object.entries(want)) {
+      const d = diff((got as Record<string, unknown>)?.[k], v, `${path}.${k}`);
+      if (d) return d;
+    }
+    return null;
+  }
+  return got === want ? null : `${path}: got ${String(got)}, want ${String(want)}`;
+}
+
+function opts(input: Record<string, unknown>): IrpfOpts {
+  const { dependiente, discapacidad, inicio_actividad, deducciones } = input;
+  return { dependiente, discapacidad, inicio_actividad, deducciones } as IrpfOpts;
+}
+
+describe('golden fixtures from the Python reference', () => {
+  it('diff catches mismatches', () => {
+    expect(diff({ a: [1, { b: 2 }] }, { a: [1, { b: 2.005 }] })).toBeNull();
+    expect(diff({ a: [1, { b: 2 }] }, { a: [1, { b: 2.02 }] })).toBe('.a.1.b: got 2, want 2.02');
+    expect(diff({}, { a: 1 })).not.toBeNull();
+  });
+
+  it.each(golden.actividad.map((c, i) => [i, c] as const))('actividad #%i', (_, c) => {
+    const inp = c.input as Record<string, number | boolean | undefined>;
+    const got = actividad(
+      inp.ingresos as number,
+      inp.gastos as number,
+      loadIrpfRules(c.year),
+      (inp.base_elegida as number | undefined) ?? null,
+      (inp.gastos_dificil as boolean | undefined) ?? true,
+    );
+    expect(diff(got, c.expected)).toBeNull();
+  });
+
+  it.each(golden.irpf_anual.map((c, i) => [i, c] as const))('irpf_anual #%i', (_, c) => {
+    const rules = loadIrpfRules(c.year);
+    const h = c.hogar_input as Hogar;
+    const minimo = minimoPersonalFamiliar(h.contribuyentes[0], rules, h.descendientes, h.ascendientes);
+    const got = irpfAnual(rules, minimo, c.input as Rentas, opts(c.input));
+    expect(diff(got, c.expected)).toBeNull();
+  });
+
+  it.each(golden.irpf_cadena.map((c, i) => [i, c] as const))('irpf chain #%i', (_, c) => {
+    const rules = loadIrpfRules(c.year);
+    const minimo = minimoPersonalFamiliar((c.hogar_input as Hogar).contribuyentes[0], rules);
+    let prev: ReturnType<typeof irpfAnual> | undefined;
+    for (const ano of c.anos) {
+      prev = irpfAnual(rules, minimo, ano.input as Rentas, {
+        pendientes_general: prev?.pendientes_general,
+        pendientes_ahorro: prev?.pendientes_ahorro,
+      });
+      expect(diff(prev, ano.expected)).toBeNull();
+    }
+  });
+
+  it.each(golden.irpf_conjunta.map((c, i) => [i, c] as const))('irpf_conjunta #%i', (_, c) => {
+    const rules = loadIrpfRules(c.year);
+    const h = c.hogar_input as Hogar;
+    const minimo = minimoConjunta(h.contribuyentes, rules, h.descendientes, h.ascendientes);
+    const got = irpfConjunta(rules, minimo, c.miembros as Rentas[]);
+    expect(diff(got, c.expected)).toBeNull();
+  });
+});

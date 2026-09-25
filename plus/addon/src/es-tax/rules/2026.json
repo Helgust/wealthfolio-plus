@@ -1,0 +1,365 @@
+{
+ "year": 2026,
+ "estatal": {
+  "general": {
+   "brackets": [
+    {
+     "upto": 12450.0,
+     "rate": 0.095
+    },
+    {
+     "upto": 20200.0,
+     "rate": 0.12
+    },
+    {
+     "upto": 35200.0,
+     "rate": 0.15
+    },
+    {
+     "upto": 60000.0,
+     "rate": 0.185
+    },
+    {
+     "upto": 300000.0,
+     "rate": 0.225
+    },
+    {
+     "upto": null,
+     "rate": 0.245
+    }
+   ]
+  },
+  "ahorro": {
+   "brackets": [
+    {
+     "upto": 6000.0,
+     "rate": 0.095
+    },
+    {
+     "upto": 50000.0,
+     "rate": 0.105
+    },
+    {
+     "upto": 200000.0,
+     "rate": 0.115
+    },
+    {
+     "upto": 300000.0,
+     "rate": 0.135
+    },
+    {
+     "upto": null,
+     "rate": 0.15
+    }
+   ]
+  },
+  "minimos": {
+   "contribuyente": {
+    "general": 5550.0,
+    "mayor_65": 1150.0,
+    "mayor_75": 1400.0
+   },
+   "descendientes": {
+    "por_orden": [
+     2400.0,
+     2700.0,
+     4000.0,
+     4500.0
+    ],
+    "menor_3": 2800.0
+   },
+   "ascendientes": {
+    "general": 1150.0,
+    "mayor_75": 1400.0
+   },
+   "discapacidad": {
+    "grado_33": 3000.0,
+    "grado_65": 9000.0,
+    "asistencia": 3000.0
+   }
+  }
+ },
+ "autonomica": {
+  "general": {
+   "brackets": [
+    {
+     "upto": 12000.0,
+     "rate": 0.088
+    },
+    {
+     "upto": 22000.0,
+     "rate": 0.117
+    },
+    {
+     "upto": 32000.0,
+     "rate": 0.146
+    },
+    {
+     "upto": 42000.0,
+     "rate": 0.17
+    },
+    {
+     "upto": 52000.0,
+     "rate": 0.194
+    },
+    {
+     "upto": 62000.0,
+     "rate": 0.219
+    },
+    {
+     "upto": 72000.0,
+     "rate": 0.244
+    },
+    {
+     "upto": 100000.0,
+     "rate": 0.261
+    },
+    {
+     "upto": 150000.0,
+     "rate": 0.2735
+    },
+    {
+     "upto": 200000.0,
+     "rate": 0.2835
+    },
+    {
+     "upto": null,
+     "rate": 0.2935
+    }
+   ]
+  },
+  "ahorro": {
+   "brackets": [
+    {
+     "upto": 6000.0,
+     "rate": 0.095
+    },
+    {
+     "upto": 50000.0,
+     "rate": 0.105
+    },
+    {
+     "upto": 200000.0,
+     "rate": 0.115
+    },
+    {
+     "upto": 300000.0,
+     "rate": 0.135
+    },
+    {
+     "upto": null,
+     "rate": 0.15
+    }
+   ]
+  },
+  "minimos": {
+   "contribuyente": {
+    "general": 6105.0,
+    "mayor_65": 1265.0,
+    "mayor_75": 1540.0
+   },
+   "descendientes": {
+    "por_orden": [
+     2640.0,
+     2970.0,
+     4400.0,
+     4950.0
+    ],
+    "menor_3": 3080.0
+   },
+   "ascendientes": {
+    "general": 1265.0,
+    "mayor_75": 1540.0
+   },
+   "discapacidad": {
+    "grado_33": 3300.0,
+    "grado_65": 9900.0,
+    "asistencia": 3300.0
+   }
+  }
+ },
+ "condiciones": {
+  "edad_mayor_65": 65,
+  "edad_mayor_75": 75,
+  "descendiente_edad_max": 25,
+  "descendiente_menor": 3,
+  "renta_max_familiar": 8000.0
+ },
+ "actividad": {
+  "gastos_dificil_justificacion": {
+   "rate": 0.05,
+   "limit": 2000.0
+  }
+ },
+ "reducciones": {
+  "actividad": {
+   "dependiente": {
+    "general": 2000.0,
+    "adicional": {
+     "rend_max": 19747.5,
+     "otras_rentas_max": 6500.0,
+     "plano_hasta": 14047.5,
+     "importe": 6498.0,
+     "pendiente": 1.14
+    },
+    "discapacidad_33": 3500.0,
+    "discapacidad_65": 7750.0
+   },
+   "rentas_bajas": {
+    "rentas_max": 12000.0,
+    "plano_hasta": 8000.0,
+    "importe": 1620.0,
+    "pendiente": 0.405
+   },
+   "inicio_actividad": {
+    "rate": 0.2,
+    "base_max": 100000.0
+   }
+  },
+  "prevision_social": {
+   "limite_general": 1500.0,
+   "incremento_autonomo": 4250.0,
+   "porcentaje_rendimientos": 0.3
+  },
+  "compensacion": {
+   "limite_cruzado": 0.25,
+   "anos": 4
+  },
+  "tributacion_conjunta": {
+   "reduccion_biparental": 3400.0
+  }
+ },
+ "reta": {
+  "gastos_genericos": 0.07,
+  "base_maxima": 5101.2,
+  "tipos": {
+   "contingencias_comunes": 0.283,
+   "contingencias_profesionales": 0.013,
+   "cese_actividad": 0.009,
+   "formacion_profesional": 0.001,
+   "mei": 0.009
+  },
+  "tramos": [
+   {
+    "tabla": "reducida",
+    "tramo": 1,
+    "upto": 670.0,
+    "inclusive": true,
+    "base_min": 653.59,
+    "base_max": 718.94
+   },
+   {
+    "tabla": "reducida",
+    "tramo": 2,
+    "upto": 900.0,
+    "inclusive": true,
+    "base_min": 718.95,
+    "base_max": 900.0
+   },
+   {
+    "tabla": "reducida",
+    "tramo": 3,
+    "upto": 1166.7,
+    "inclusive": false,
+    "base_min": 849.67,
+    "base_max": 1166.7
+   },
+   {
+    "tabla": "general",
+    "tramo": 1,
+    "upto": 1300.0,
+    "inclusive": true,
+    "base_min": 950.98,
+    "base_max": 1300.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 2,
+    "upto": 1500.0,
+    "inclusive": true,
+    "base_min": 960.78,
+    "base_max": 1500.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 3,
+    "upto": 1700.0,
+    "inclusive": true,
+    "base_min": 960.78,
+    "base_max": 1700.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 4,
+    "upto": 1850.0,
+    "inclusive": true,
+    "base_min": 1143.79,
+    "base_max": 1850.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 5,
+    "upto": 2030.0,
+    "inclusive": true,
+    "base_min": 1209.15,
+    "base_max": 2030.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 6,
+    "upto": 2330.0,
+    "inclusive": true,
+    "base_min": 1274.51,
+    "base_max": 2330.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 7,
+    "upto": 2760.0,
+    "inclusive": true,
+    "base_min": 1356.21,
+    "base_max": 2760.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 8,
+    "upto": 3190.0,
+    "inclusive": true,
+    "base_min": 1437.91,
+    "base_max": 3190.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 9,
+    "upto": 3620.0,
+    "inclusive": true,
+    "base_min": 1519.61,
+    "base_max": 3620.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 10,
+    "upto": 4050.0,
+    "inclusive": true,
+    "base_min": 1601.31,
+    "base_max": 4050.0
+   },
+   {
+    "tabla": "general",
+    "tramo": 11,
+    "upto": 6000.0,
+    "inclusive": true,
+    "base_min": 1732.03,
+    "base_max": 5101.2
+   },
+   {
+    "tabla": "general",
+    "tramo": 12,
+    "upto": null,
+    "inclusive": true,
+    "base_min": 1928.1,
+    "base_max": 5101.2
+   }
+  ]
+ }
+}
