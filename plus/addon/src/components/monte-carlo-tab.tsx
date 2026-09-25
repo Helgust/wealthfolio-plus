@@ -47,7 +47,13 @@ function tableYears(result: MonteCarloResult): number[] {
   return result.years.map((_, t) => t).filter((t) => t % 5 === 0 || t === n - 1);
 }
 
-function Results({ result, rows, currency, mode }: { result: MonteCarloResult } & Pick<Props, 'rows' | 'currency' | 'mode'>) {
+function Results({
+  result,
+  ms,
+  rows,
+  currency,
+  mode,
+}: { result: MonteCarloResult; ms: number | null } & Pick<Props, 'rows' | 'currency' | 'mode'>) {
   const b = mode === 'today' ? result.real : result.nominal;
   const last = result.years.length - 1;
   const lastYear = result.years[last];
@@ -57,7 +63,7 @@ function Results({ result, rows, currency, mode }: { result: MonteCarloResult } 
         <Metric
           label="Success rate"
           value={formatPercent(result.successRate)}
-          hint={`of ${result.trials.toLocaleString('en-GB')} trials cover every year`}
+          hint={`of ${result.trials.toLocaleString('en-GB')} trials cover every year${ms === null ? '' : ` · run in ${(ms / 1000).toFixed(2)} s`}`}
         />
         <Metric label={`Median net worth in ${lastYear}`} value={formatMoney(b[50][last], currency)} />
         <Metric
@@ -133,7 +139,7 @@ export function MonteCarloTab({ plan, start, rows, store, currency, mode, onSett
           </div>
         )}
         {run?.error && <p className="text-destructive text-sm">{run.error}</p>}
-        {run?.result && <Results result={run.result} rows={rows} currency={currency} mode={mode} />}
+        {run?.result && <Results result={run.result} ms={run.ms} rows={rows} currency={currency} mode={mode} />}
         <p className="text-muted-foreground text-xs">
           A trial succeeds when the accounts cover every year without a shortfall. Volatility and
           correlations are ignidash's defaults from US data (NYU Stern) until the calibration on euro

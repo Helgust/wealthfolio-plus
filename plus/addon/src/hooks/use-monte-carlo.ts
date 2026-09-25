@@ -13,6 +13,8 @@ export interface MonteCarloRun {
   /** Trials done */
   done: number;
   result: MonteCarloResult | null;
+  /** How long the run took, ms */
+  ms: number | null;
   error: string | null;
 }
 
@@ -46,9 +48,10 @@ function createMonteCarloStore(): MonteCarloStore {
       const update = (patch: Partial<MonteCarloRun>) => {
         if (!ac.signal.aborted && current) set({ ...current, ...patch });
       };
-      set({ plan, start, done: 0, result: null, error: null });
+      set({ plan, start, done: 0, result: null, ms: null, error: null });
+      const began = performance.now();
       runMonteCarlo(plan, start, { signal: ac.signal, onProgress: (done) => update({ done }) }).then(
-        (result) => update({ result }),
+        (result) => update({ result, ms: performance.now() - began }),
         (e: unknown) => update({ error: String(e) }),
       );
     },
