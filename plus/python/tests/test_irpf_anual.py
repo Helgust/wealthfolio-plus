@@ -5,13 +5,17 @@ import pytest
 
 from planner.tax import (
     Discapacidad,
+    Familiar,
     Mitades,
     Persona,
+    RentasMiembro,
     base_imponible_ahorro,
     compensar_base_liquidable_general,
     cuota_integra,
     irpf_anual,
+    irpf_conjunta,
     load_irpf_rules,
+    minimo_conjunta,
     minimo_personal_familiar,
     pendientes_vacios,
     reduccion_actividad,
@@ -236,4 +240,75 @@ def test_irpf_anual_vectorized(r2026, minimo):
     vec = irpf_anual(r2026, minimo, rendimiento_actividad=rn, aportacion_pensiones=1_500)
     for i in range(3):
         one = irpf_anual(r2026, minimo, rendimiento_actividad=rn[i], aportacion_pensiones=1_500)
+        assert vec.cuota_liquida.total[i] == pytest.approx(one.cuota_liquida.total)
+
+
+# --- Tributación conjunta (art. 84) ---------------------------------------------------
+
+
+def test_minimo_conjunta_one_general_amount_increments_per_spouse(r2026):
+    got = minimo_conjunta([Persona(edad=70), Persona(edad=40)], r2026)
+    assert got.estatal == 5_550 + 1_150
+    assert got.autonomica == 6_105 + 1_265
+    single = minimo_personal_familiar(Persona(edad=40), r2026)
+    assert minimo_conjunta([Persona(edad=40)], r2026) == single
+
+
+def test_minimo_conjunta_children_counted_in_full(r2026):
+    hijos = [Familiar(edad=5), Familiar(edad=2)]
+    got = minimo_conjunta([Persona(edad=40), Persona(edad=40)], r2026, descendientes=hijos)
+    assert got.estatal == 5_550 + 2_400 + 2_700 + 2_800
+
+
+def test_irpf_conjunta_reduccion_general_first(r2026, minimo):
+    res = irpf_conjunta(
+        r2026,
+        minimo,
+        [RentasMiembro(rendimiento_actividad=30_000), RentasMiembro(rendimiento_actividad=10_000)],
+    )
+    assert res.base_imponible_general == 40_000
+    assert res.reduccion_conjunta == 3_400
+    assert res.base_liquidable_general == 36_600
+
+
+def test_irpf_conjunta_reduccion_remainder_to_ahorro(r2026, minimo):
+    res = irpf_conjunta(
+        r2026, minimo, [RentasMiembro(otras_rentas_general=-1_000, rcm=5_000), RentasMiembro()]
+    )
+    assert res.base_liquidable_general == 0
+    assert res.base_imponible_ahorro == 5_000
+    assert res.base_liquidable_ahorro == 1_600
+    assert res.reduccion_conjunta == 3_400
+    # Отрицательная база переносится целиком: 84.2.3º не делает её ещё меньше.
+    assert res.pendientes_general[-1] == 1_000
+
+
+def test_irpf_conjunta_ahorro_not_negative(r2026, minimo):
+    res = irpf_conjunta(r2026, minimo, [RentasMiembro(otras_rentas_general=1_000, rcm=500)])
+    assert res.base_liquidable_general == 0
+    assert res.base_liquidable_ahorro == 0
+    assert res.reduccion_conjunta == 1_500
+
+
+def test_irpf_conjunta_pension_limits_per_member(r2026, minimo):
+    # 84.2.1º: у каждого свой лимит 1 500 € и свои 30 %.
+    miembros = [
+        RentasMiembro(rendimiento_actividad=40_000, aportacion_pensiones=1_500),
+        RentasMiembro(rendimiento_actividad=4_000, aportacion_pensiones=1_500),
+    ]
+    res = irpf_conjunta(r2026, minimo, miembros)
+    assert res.reduccion_prevision_social == pytest.approx(1_500 + 0.3 * 4_000)
+
+
+def test_irpf_conjunta_actividad_reduction_on_unit_total(r2026, minimo):
+    # 84.2: лимит art. 32.2.3º не умножается: считается по rentas всей unidad familiar.
+    miembros = [RentasMiembro(rendimiento_actividad=7_000)] * 2
+    assert irpf_conjunta(r2026, minimo, miembros).reduccion_actividad == 0
+
+
+def test_irpf_conjunta_vectorized(r2026, minimo):
+    rn = np.array([9_000.0, 30_000.0, 80_000.0])
+    vec = irpf_conjunta(r2026, minimo, [RentasMiembro(rendimiento_actividad=rn), RentasMiembro()])
+    for i in range(3):
+        one = irpf_conjunta(r2026, minimo, [RentasMiembro(rendimiento_actividad=rn[i])])
         assert vec.cuota_liquida.total[i] == pytest.approx(one.cuota_liquida.total)

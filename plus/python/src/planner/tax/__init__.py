@@ -12,8 +12,22 @@ from planner.tax.compensacion import (
     compensar_base_liquidable_general,
     pendientes_vacios,
 )
-from planner.tax.irpf import IrpfAnual, cuota_integra, cuota_integra_mitad, irpf_anual
-from planner.tax.minimos import Discapacidad, Familiar, Mitades, Persona, minimo_personal_familiar
+from planner.tax.irpf import (
+    IrpfAnual,
+    RentasMiembro,
+    cuota_integra,
+    cuota_integra_mitad,
+    irpf_anual,
+    irpf_conjunta,
+)
+from planner.tax.minimos import (
+    Discapacidad,
+    Familiar,
+    Mitades,
+    Persona,
+    minimo_conjunta,
+    minimo_personal_familiar,
+)
 from planner.tax.reducciones import reduccion_actividad, reduccion_prevision_social
 from planner.tax.rules import (
     ActividadRules,
@@ -38,6 +52,7 @@ __all__ = [
     "IrpfRules",
     "Mitades",
     "Persona",
+    "RentasMiembro",
     "RetaRules",
     "RetaTramo",
     "Scale",
@@ -49,8 +64,10 @@ __all__ = [
     "cuota_integra_mitad",
     "gastos_dificil_justificacion",
     "irpf_anual",
+    "irpf_conjunta",
     "load_irpf_rules",
     "load_scale",
+    "minimo_conjunta",
     "minimo_personal_familiar",
     "pendientes_vacios",
     "reduccion_actividad",

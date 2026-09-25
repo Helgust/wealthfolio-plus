@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -73,6 +74,7 @@ class IrpfAnual:
     base_imponible_general: float
     base_imponible_ahorro: float
     compensado_ahorro_anteriores: float  # убытки прошлых лет, списанные в этом году
+    reduccion_conjunta: float  # art. 84.2.3º: всего, с общей базы и базы сбережений
     reduccion_prevision_social: float
     compensado_general_anteriores: float  # отрицательные bases liquidables прошлых лет
     base_liquidable_general: float
@@ -103,7 +105,7 @@ def irpf_anual(
     pendientes_general=None,
     pendientes_ahorro=None,
 ) -> IrpfAnual:
-    """IRPF за год от rendimientos до cuota líquida (estatal + autonómica).
+    """IRPF за год от rendimientos до cuota líquida (estatal + autonómica), tributación individual.
 
     rendimiento_actividad — rendimiento neto autónomo (`planner.tax.actividad`); при
     dependiente=True он должен быть посчитан без gastos de difícil justificación.
@@ -116,6 +118,124 @@ def irpf_anual(
     Не моделируется: reducción art. 32.1 (rentas irregulares), ganancias в общей базе,
     перенос неиспользованных aportaciones (art. 52.2), pensiones compensatorias (art. 55).
     """
+    trabajo = np.asarray(rendimientos_trabajo, dtype=float)
+    ps = rules.reducciones.prevision_social
+
+    def prevision(rn_reducido):
+        return reduccion_prevision_social(
+            aportacion_pensiones, aportacion_pensiones_autonomo, rn_reducido + trabajo, ps
+        )
+
+    return _irpf(
+        rules,
+        minimo,
+        rendimiento_actividad=rendimiento_actividad,
+        rendimientos_trabajo=trabajo,
+        otras_rentas_general=otras_rentas_general,
+        rcm=rcm,
+        ganancias=ganancias,
+        prevision=prevision,
+        reduccion_conjunta=0.0,
+        deducciones=deducciones,
+        dependiente=dependiente,
+        discapacidad=discapacidad,
+        inicio_actividad=inicio_actividad,
+        pendientes_general=pendientes_general,
+        pendientes_ahorro=pendientes_ahorro,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class RentasMiembro:
+    """Rentas одного супруга для `irpf_conjunta`. Смысл полей — как в `irpf_anual`."""
+
+    rendimiento_actividad: float = 0.0
+    rendimientos_trabajo: float = 0.0
+    otras_rentas_general: float = 0.0
+    rcm: float = 0.0
+    ganancias: float = 0.0
+    aportacion_pensiones: float = 0.0
+    aportacion_pensiones_autonomo: float = 0.0
+
+
+def irpf_conjunta(
+    rules: IrpfRules,
+    minimo: Mitades,
+    miembros: list[RentasMiembro],
+    *,
+    deducciones: Mitades | None = None,
+    dependiente: bool = False,
+    discapacidad: Discapacidad = Discapacidad.NINGUNA,
+    inicio_actividad: bool = False,
+    pendientes_general=None,
+    pendientes_ahorro=None,
+) -> IrpfAnual:
+    """IRPF за год в tributación conjunta, unidad familiar biparental (arts. 82.1.1.ª, 84 LIRPF).
+
+    Rentas супругов складываются (84.5); лимиты не умножаются на число членов (84.2), поэтому
+    reducciones art. 32 считаются один раз по сумме rendimientos. Исключение — лимиты планов
+    пенсий: они применяются к каждому участнику отдельно (84.2.1º). До reducciones arts. 51–54
+    база уменьшается на reduccion_biparental (84.2.3º). minimo — из `minimo_conjunta`.
+    dependiente, discapacidad, inicio_actividad — для reducción art. 32 всей unidad familiar.
+    pendientes_* — общий перенос убытков unidad familiar (84.3).
+    """
+    ps = rules.reducciones.prevision_social
+
+    def total(campo: str):
+        return sum(np.asarray(getattr(m, campo), dtype=float) for m in miembros)
+
+    def prevision(_rn_reducido):
+        # TODO: verify — 30 % (art. 52.1.a) считаем от собственных rendimientos каждого
+        # супруга без reducción art. 32: в conjunta она одна на всю unidad familiar.
+        return sum(
+            reduccion_prevision_social(
+                m.aportacion_pensiones,
+                m.aportacion_pensiones_autonomo,
+                np.asarray(m.rendimiento_actividad, dtype=float) + m.rendimientos_trabajo,
+                ps,
+            )
+            for m in miembros
+        )
+
+    return _irpf(
+        rules,
+        minimo,
+        rendimiento_actividad=total("rendimiento_actividad"),
+        rendimientos_trabajo=total("rendimientos_trabajo"),
+        otras_rentas_general=total("otras_rentas_general"),
+        rcm=total("rcm"),
+        ganancias=total("ganancias"),
+        prevision=prevision,
+        reduccion_conjunta=rules.reducciones.tributacion_conjunta.reduccion_biparental,
+        deducciones=deducciones,
+        dependiente=dependiente,
+        discapacidad=discapacidad,
+        inicio_actividad=inicio_actividad,
+        pendientes_general=pendientes_general,
+        pendientes_ahorro=pendientes_ahorro,
+    )
+
+
+def _irpf(
+    rules: IrpfRules,
+    minimo: Mitades,
+    *,
+    rendimiento_actividad,
+    rendimientos_trabajo,
+    otras_rentas_general,
+    rcm,
+    ganancias,
+    prevision: Callable,
+    reduccion_conjunta: float,
+    deducciones: Mitades | None,
+    dependiente: bool,
+    discapacidad: Discapacidad,
+    inicio_actividad: bool,
+    pendientes_general,
+    pendientes_ahorro,
+) -> IrpfAnual:
+    """Общий расчёт individual и conjunta. prevision(rn_reducido) — reducción por planes
+    de pensiones до ограничения базой; reduccion_conjunta — art. 84.2.3º (0 в individual)."""
     r = rules.reducciones
     if pendientes_general is None:
         pendientes_general = pendientes_vacios(r.compensacion, ahorro=False)
@@ -146,17 +266,19 @@ def irpf_anual(
     big = rn_reducido + trabajo + otras_rentas_general
     ahorro = base_imponible_ahorro(rcm, ganancias, pendientes_ahorro, r.compensacion)
 
-    # Art. 50.1: reducciones не могут сделать базу отрицательной.
-    red_ps = reduccion_prevision_social(
-        aportacion_pensiones,
-        aportacion_pensiones_autonomo,
-        rn_reducido + trabajo,
-        r.prevision_social,
-    )
-    red_ps = np.minimum(red_ps, np.maximum(big, 0.0))
-    general = compensar_base_liquidable_general(big - red_ps, pendientes_general, r.compensacion)
+    # Art. 84.2.3º: сначала общая база (не ниже 0), остаток — база сбережений (не ниже 0).
+    conj_general = np.minimum(reduccion_conjunta, np.maximum(big, 0.0))
+    conj_ahorro = np.minimum(reduccion_conjunta - conj_general, ahorro.base_imponible)
+    big_reducida = big - conj_general
 
-    blg, bla = general.base_liquidable, ahorro.base_imponible
+    # Art. 50.1: reducciones не могут сделать базу отрицательной.
+    red_ps = np.minimum(prevision(rn_reducido), np.maximum(big_reducida, 0.0))
+    general = compensar_base_liquidable_general(
+        big_reducida - red_ps, pendientes_general, r.compensacion
+    )
+
+    blg = general.base_liquidable
+    bla = _out(ahorro.base_imponible - conj_ahorro)
     ci = cuota_integra(blg, bla, minimo, rules)
     # Cuota líquida каждой половины не может быть отрицательной.
     cl = Mitades(
@@ -167,8 +289,9 @@ def irpf_anual(
         rendimiento_actividad=_out(rn),
         reduccion_actividad=red_act,
         base_imponible_general=_out(big),
-        base_imponible_ahorro=bla,
+        base_imponible_ahorro=ahorro.base_imponible,
         compensado_ahorro_anteriores=ahorro.compensado_anteriores,
+        reduccion_conjunta=_out(conj_general + conj_ahorro),
         reduccion_prevision_social=_out(red_ps),
         compensado_general_anteriores=general.compensado_anteriores,
         base_liquidable_general=blg,

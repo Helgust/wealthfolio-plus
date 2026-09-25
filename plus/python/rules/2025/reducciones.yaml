@@ -44,3 +44,11 @@ compensacion:
   limite_cruzado: 0.25   # доля положительного saldo другой корзины (rcm ↔ ganancias), общая
                          # для убытков текущего и прошлых лет (Manual práctico 2025, cap. 12)
   anos: 4                # перенос на 4 следующих года, в максимально возможной сумме
+
+# Tributación conjunta (art. 84 LIRPF), unidad familiar art. 82.1.1.ª: cónyuges no separados
+# (+ hijos menores). 84.2.3º: reducción de la base imponible до reducciones arts. 51, 53, 54 и
+# DA 11.ª — сначала общая база (не ниже 0), остаток — база сбережений (не ниже 0).
+# Сверено: LIRPF, консолидированный текст BOE на 09.09.2026 (84.2.3º не менялся с 2007 г.).
+# Monoparental (84.2.4º, 2 150 €) не моделируется: домохозяйство — пара.
+tributacion_conjunta:
+  reduccion_biparental: 3400

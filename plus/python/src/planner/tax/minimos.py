@@ -56,19 +56,26 @@ def _discapacidad(p: Persona, a: DiscapacidadAmounts) -> float:
     return base + (a.asistencia if p.asistencia or grado_65 else 0.0)
 
 
+def _incrementos_contribuyente(p: Persona, a: MinimoAmounts, c: MinimoConditions) -> float:
+    """Прибавки к mínimo del contribuyente за возраст (art. 57.2) и discapacidad (art. 60.1)."""
+    total = _discapacidad(p, a.discapacidad)
+    if p.edad >= c.edad_mayor_65:
+        total += a.contribuyente.mayor_65
+    if p.edad >= c.edad_mayor_75:
+        total += a.contribuyente.mayor_75
+    return total
+
+
 def _minimo_mitad(
-    contribuyente: Persona,
+    contribuyentes: list[Persona],
     descendientes: list[Familiar],
     ascendientes: list[Familiar],
     a: MinimoAmounts,
     c: MinimoConditions,
 ) -> float:
+    # Общая сумма — одна на декларацию и в conjunta; прибавки — по каждому супругу (art. 84.2.2º).
     total = a.contribuyente.general
-    if contribuyente.edad >= c.edad_mayor_65:
-        total += a.contribuyente.mayor_65
-    if contribuyente.edad >= c.edad_mayor_75:
-        total += a.contribuyente.mayor_75
-    total += _discapacidad(contribuyente, a.discapacidad)
+    total += sum(_incrementos_contribuyente(p, a, c) for p in contribuyentes)
 
     # Descendientes: младше 25 или с discapacidad; доходы не выше лимита. Порядок — по возрасту
     # (старший — «первый»), сумма зависит от номера ребёнка (art. 58.1).
@@ -114,9 +121,33 @@ def minimo_personal_familiar(
     Условия «живёт вместе» и прочие неденежные проверяет вызывающий: сюда передаются
     только те родственники, по которым налогоплательщик вообще может претендовать на mínimo.
     """
+    return _minimo([contribuyente], rules, descendientes, ascendientes)
+
+
+def minimo_conjunta(
+    conyuges: list[Persona],
+    rules: IrpfRules,
+    descendientes: list[Familiar] | None = None,
+    ascendientes: list[Familiar] | None = None,
+) -> Mitades:
+    """Mínimo personal y familiar в tributación conjunta (art. 84.2.2º LIRPF).
+
+    Mínimo del contribuyente (art. 57.1) — один на unidad familiar; прибавки за возраст
+    и discapacidad — по обстоятельствам каждого супруга. Дети передаются как descendientes
+    (share=1: вся сумма в одной декларации), mínimo del contribuyente на них не положен.
+    """
+    return _minimo(conyuges, rules, descendientes, ascendientes)
+
+
+def _minimo(
+    contribuyentes: list[Persona],
+    rules: IrpfRules,
+    descendientes: list[Familiar] | None,
+    ascendientes: list[Familiar] | None,
+) -> Mitades:
     desc, asc = descendientes or [], ascendientes or []
     c = rules.condiciones
     return Mitades(
-        estatal=_minimo_mitad(contribuyente, desc, asc, rules.estatal.minimos, c),
-        autonomica=_minimo_mitad(contribuyente, desc, asc, rules.autonomica.minimos, c),
+        estatal=_minimo_mitad(contribuyentes, desc, asc, rules.estatal.minimos, c),
+        autonomica=_minimo_mitad(contribuyentes, desc, asc, rules.autonomica.minimos, c),
     )

@@ -248,16 +248,24 @@ class Compensacion(_Frozen):
     anos: int
 
 
+class TributacionConjunta(_Frozen):
+    """Art. 84.2.3º LIRPF."""
+
+    reduccion_biparental: float
+
+
 class Reducciones(_Frozen):
     actividad: ReduccionesActividad
     prevision_social: PrevisionSocial
     compensacion: Compensacion
+    tributacion_conjunta: TributacionConjunta
 
     def indexed(self, f: float) -> Reducciones:
         return Reducciones(
             actividad=self.actividad.indexed(f),
             prevision_social=self.prevision_social.indexed(f),
             compensacion=self.compensacion,
+            tributacion_conjunta=_scaled(self.tributacion_conjunta, f, "reduccion_biparental"),
         )
 
 
