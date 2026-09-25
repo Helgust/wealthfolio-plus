@@ -88,6 +88,14 @@
 - Не собирать аддон (`pnpm build`) при запущенном `pnpm dev:server`: оба пишут в `dist`, и хост на
   время ловит «Failed to start add-on».
 - `pnpm test` в `plus/addon` — vitest (golden-фикстуры, движок); `pnpm type-check` — tsc.
+- Recharts 3: в `onClick` графика нет активного индекса (`activeLabel` — `undefined`,
+  `activeTooltipIndex` — `null`), подсказка следует за наведением. Год под курсором запоминать
+  в `onMouseMove`. Легенда хоста (`ChartLegendContent`) красит квадратик цветом `stroke` серии:
+  у областей с обводкой цвета фона квадратиков не видно — своя легенда.
+- Визуальная проверка без форка: временный стенд `plus/addon/.harness` (vite + моковый
+  `AddonContext`, CSS — `apps/frontend/src/globals.css` с `@import "tailwindcss" source(none)`
+  и `@source` на код хоста), скриншоты — Playwright из корня форка с `channel: 'msedge'`.
+  В репозиторий не коммитить.
 
 Python-эталон:
 
