@@ -5,7 +5,7 @@ import { buildStart, loadPortfolio } from './starting-point';
 
 const money = (base: number, local = base) => ({ base, local });
 
-// Брокерский счёт: ETF в USD (2 лота, 900 $ стоимости = 810 € по историческим курсам) и 100 € денег.
+// Brokerage account: an ETF in USD (2 lots, $900 cost = 810 € at historical rates) and 100 € cash.
 const etf = {
   id: 'h1',
   holdingType: 'security',
@@ -71,7 +71,7 @@ describe('loadPortfolio', () => {
       { date: '2023-01-10', units: 6, cost: 360 },
       { date: '2024-05-01', units: 4, cost: 450 },
     ]);
-    // Официальная сборка: net worth = сумма оценок счетов.
+    // Official build: net worth = sum of account valuations.
     expect(p.exact).toBe(false);
     expect(p.netWorth).toBe(6_000);
   });

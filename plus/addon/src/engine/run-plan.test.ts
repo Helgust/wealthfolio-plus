@@ -15,7 +15,7 @@ import { cashAccount, ZERO_RETURNS } from './test-helpers';
 
 const START: StartingPoint = { netWorth: 100_000, accounts: [cashAccount(30_000)] };
 
-/** План фазы 1: без доходностей, весь поток — в cash. */
+/** Phase 1 plan: no returns, all cash flow goes to cash. */
 function plan(overrides: Partial<Plan> = {}): Plan {
   return { ...defaultPlan(2026), returns: ZERO_RETURNS, ...overrides };
 }
@@ -57,7 +57,7 @@ describe('runPlan', () => {
     expect(at(65).reta).toBe(0);
     expect(at(65).irpf).toBe(0);
     expect(at(65).people[0].retaTramo).toBeNull();
-    // Кумулятивный поток сходится с остатком.
+    // Cumulative flow adds up to the balance.
     const flows = rows.reduce((s, r) => s + r.netCashFlow, 0);
     expect(rows.at(-1)!.cash).toBeCloseTo(30_000 + flows, 4);
   });
@@ -79,7 +79,7 @@ describe('runPlan', () => {
 
   it('carries a loss forward to the next years', () => {
     const p = plan();
-    // Маржа растёт на 50 % в год, а cuota RETA почти постоянна: убыток, затем прибыль.
+    // Margin grows 50 % a year while the RETA cuota stays nearly flat: a loss, then a profit.
     p.people[0].autonomo = { revenue: 20_000, expenses: 18_000, growth: 0.5, untilAge: 65 };
     const rows = runPlan(p, START).rows;
     let prev: ReturnType<typeof irpfAnual> | undefined;
@@ -135,7 +135,7 @@ describe('runPlan', () => {
       { rendimiento_actividad: 0 },
     ]);
     expect(row.irpf).toBeCloseTo(total(res.cuota_liquida), 6);
-    // Супруг без дохода: conjunta выгоднее двух индивидуальных деклараций.
+    // Spouse without income: conjunta beats two individual returns.
     expect(row.irpf).toBeLessThan(runPlan(p, START, 'individual').rows[0].irpf);
   });
 

@@ -1,4 +1,4 @@
-// TS-порт против Python-эталона: fixtures/golden.json выгружает `python -m planner.export_ts`.
+// TS port against the Python reference: fixtures/golden.json is exported by `python -m planner.export_ts`.
 import { describe, expect, it } from 'vitest';
 import golden from './fixtures/golden.json';
 import {
@@ -14,7 +14,7 @@ import {
   type Rentas,
 } from './index';
 
-const TOL = 0.01; // евро
+const TOL = 0.01; // euros
 
 interface Hogar {
   contribuyentes: Persona[];
@@ -22,7 +22,7 @@ interface Hogar {
   ascendientes: Familiar[];
 }
 
-/** Рекурсивно сравнивает числа с допуском; возвращает путь первого расхождения. */
+/** Recursively compares numbers with a tolerance; returns the path of the first mismatch. */
 function diff(got: unknown, want: unknown, path = ''): string | null {
   if (typeof want === 'number') {
     return typeof got === 'number' && Math.abs(got - want) <= TOL

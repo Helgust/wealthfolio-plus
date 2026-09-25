@@ -1,16 +1,16 @@
-// Соответствие «счёт Wealthfolio → испанский тип» и владелец счёта. Это факт о счетах, а не
-// о плане: одна запись на все планы, ключ accounts.v1 в ctx.api.storage.
+// Mapping "Wealthfolio account → Spanish type" and the account owner. This is a fact about
+// accounts, not about a plan: one record for all plans, key accounts.v1 in ctx.api.storage.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { z } from 'zod';
 
 /**
- * cash — проценты в базе сбережений; fund — fondos de inversión (traspaso без налога);
- * brokerage — ETF и акции; ppi, ppes — plan de pensiones individual и de empleo simplificado
- * (для autónomo); other — вне модели: стоимость остаётся постоянной.
+ * cash — interest in the savings base; fund — fondos de inversión (traspaso without tax);
+ * brokerage — ETFs and stocks; ppi, ppes — plan de pensiones individual and de empleo
+ * simplificado (for autónomos); other — outside the model: value stays constant.
  */
 export const SpanishKindSchema = z.enum(['cash', 'fund', 'brokerage', 'ppi', 'ppes', 'other']);
 
-/** Индекс человека в плане или совместный счёт (доходы делятся поровну). */
+/** Index of a person in the plan, or a joint account (income split equally). */
 export const OwnerSchema = z.union([z.literal(0), z.literal(1), z.literal('joint')]);
 
 export const AccountSettingSchema = z.object({
@@ -36,7 +36,7 @@ export const KIND_LABEL: Record<SpanishKind, string> = {
 
 export const isPension = (k: SpanishKind) => k === 'ppi' || k === 'ppes';
 
-/** Тип по умолчанию для счёта без настройки — по типу счёта Wealthfolio. */
+/** Default type for an account without a setting — by the Wealthfolio account type. */
 export function defaultSetting(accountType: string): AccountSetting {
   const kind: SpanishKind =
     accountType === 'CASH'
@@ -49,7 +49,7 @@ export function defaultSetting(accountType: string): AccountSetting {
 
 const KEY = 'accounts.v1';
 
-/** Испорченная запись не валит страницу: счета получают типы по умолчанию. */
+/** A broken record does not break the page: accounts get default types. */
 export function parseAccountSettings(json: string | null): AccountSettings {
   if (json === null) return {};
   try {

@@ -5,5 +5,5 @@ __pycache__/
 .ruff_cache/
 .ipynb_checkpoints/
 
-# Личные данные: эталонные декларации (шаблон — tests/data/declaracion.example.yaml)
+# Personal data: reference tax returns (template — tests/data/declaracion.example.yaml)
 tests/data/declaracion_*.yaml

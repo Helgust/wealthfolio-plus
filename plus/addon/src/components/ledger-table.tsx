@@ -1,4 +1,4 @@
-// Вкладка «Table»: ledger по годам.
+// "Table" tab: ledger by year.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@wealthfolio/ui';
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';

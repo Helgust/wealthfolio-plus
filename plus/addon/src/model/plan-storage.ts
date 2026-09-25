@@ -1,4 +1,4 @@
-// План в ctx.api.storage: одна строка JSON под одним ключом (лимит значения — 250 000 символов).
+// Plan in ctx.api.storage: one JSON string under one key (value limit — 250,000 characters).
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { defaultPlan, PlanSchema, type Plan } from './plan';
 
@@ -6,7 +6,7 @@ const PLAN_KEY = 'plan.v1';
 
 export interface LoadedPlan {
   plan: Plan;
-  /** План не найден или не прошёл проверку — показан шаблон */
+  /** Plan not found or failed validation — a template is shown */
   isDefault: boolean;
   error?: string;
 }

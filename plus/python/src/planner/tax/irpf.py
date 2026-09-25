@@ -1,4 +1,4 @@
-"""Расчёт IRPF: cuota íntegra по половинам и полный расчёт года (bases → cuota líquida)."""
+"""IRPF calculation: cuota íntegra by half and the full year (bases → cuota líquida)."""
 
 from __future__ import annotations
 
@@ -29,15 +29,15 @@ def cuota_integra_mitad(
     scale_general: Scale,
     scale_ahorro: Scale,
 ):
-    """Cuota íntegra одной половины IRPF (государственной или автономной).
+    """Cuota íntegra of one IRPF half (state or regional).
 
-    Mínimo personal y familiar НЕ вычитается из базы. Он сначала относится
-    к общей базе, остаток — к базе сбережений (art. 56.2 LIRPF). Затем шкала
-    применяется к базе и отдельно к части mínimo, и второе вычитается
-    из первого (arts. 63, 66 LIRPF). Вызывать отдельно для каждой половины:
-    у них разные шкалы и разные mínimos.
+    The mínimo personal y familiar is NOT subtracted from the base. It is allocated to the
+    general base first, the rest to the savings base (art. 56.2 LIRPF). Then the scale is
+    applied to the base and separately to the mínimo part, and the second is subtracted
+    from the first (arts. 63, 66 LIRPF). Call separately for each half: they have
+    different scales and different mínimos.
 
-    Аргументы — числа или numpy-массивы одинаковой формы (траектории Monte Carlo).
+    Arguments are numbers or numpy arrays of the same shape (Monte Carlo trajectories).
     """
     minimo_general = np.minimum(minimo, base_general)
     minimo_ahorro = np.minimum(minimo - minimo_general, base_ahorro)
@@ -54,7 +54,7 @@ def cuota_integra(
     minimo: Mitades,
     rules: IrpfRules,
 ) -> Mitades:
-    """Cuota íntegra estatal и autonómica. Bases — liquidables (после reducciones)."""
+    """Cuota íntegra estatal and autonómica. Bases are liquidables (after reducciones)."""
     return Mitades(
         estatal=cuota_integra_mitad(
             base_general, base_ahorro, minimo.estatal, rules.estatal.general, rules.estatal.ahorro
@@ -71,25 +71,25 @@ def cuota_integra(
 
 @dataclass(frozen=True, slots=True)
 class IrpfAnual:
-    """Полный расчёт IRPF за год. Поля — числа или массивы (траектории)."""
+    """Full IRPF calculation for a year. Fields are numbers or arrays (trajectories)."""
 
-    rendimiento_actividad: float  # rendimiento neto до reducciones art. 32
+    rendimiento_actividad: float  # rendimiento neto before art. 32 reducciones
     reduccion_actividad: float
-    gastos_trabajo: float  # otros gastos art. 19.2.f с trabajo_integro
-    reduccion_trabajo: float  # art. 20 с trabajo_integro
+    gastos_trabajo: float  # otros gastos art. 19.2.f on trabajo_integro
+    reduccion_trabajo: float  # art. 20 on trabajo_integro
     base_imponible_general: float
     base_imponible_ahorro: float
-    compensado_ahorro_anteriores: float  # убытки прошлых лет, списанные в этом году
-    reduccion_conjunta: float  # art. 84.2.3º: всего, с общей базы и базы сбережений
+    compensado_ahorro_anteriores: float  # prior-year losses used this year
+    reduccion_conjunta: float  # art. 84.2.3º: total, from the general and savings bases
     reduccion_prevision_social: float
-    compensado_general_anteriores: float  # отрицательные bases liquidables прошлых лет
+    compensado_general_anteriores: float  # prior-year negative bases liquidables
     base_liquidable_general: float
     base_liquidable_ahorro: float
     minimo: Mitades
     cuota_integra: Mitades
     deducciones: Mitades
     cuota_liquida: Mitades
-    pendientes_general: np.ndarray  # состояние переноса на следующий год
+    pendientes_general: np.ndarray  # carry-forward state for the next year
     pendientes_ahorro: np.ndarray
 
 
@@ -112,22 +112,22 @@ def irpf_anual(
     pendientes_general=None,
     pendientes_ahorro=None,
 ) -> IrpfAnual:
-    """IRPF за год от rendimientos до cuota líquida (estatal + autonómica), tributación individual.
+    """IRPF for a year from rendimientos to cuota líquida (estatal + autonómica), individual.
 
-    rendimiento_actividad — rendimiento neto autónomo (`planner.tax.actividad`); при
-    dependiente=True он должен быть посчитан без gastos de difícil justificación.
-    rendimientos_trabajo — rendimientos netos reducidos del trabajo, уже после arts. 19–20
-    (как в декларации).
-    trabajo_integro — rendimientos íntegros del trabajo без взносов в Seguridad Social: выплаты
-    планов пенсий, пенсии. Из них вычитаются otros gastos (19.2.f) и reducción art. 20; порог
-    art. 20 считается только по ним, поэтому с rendimientos_trabajo их не смешивать.
-    otras_rentas_general — прочее в общей базе (например, rendimiento inmobiliario).
-    rcm, ganancias — saldos базы сбережений года (могут быть < 0).
-    deducciones — сумма deducciones по половинам (estatal / autonómica), вводит пользователь.
-    pendientes_* — перенос убытков с прошлых лет (`pendientes_vacios`); None — нет переноса.
+    rendimiento_actividad — autónomo rendimiento neto (`planner.tax.actividad`); with
+    dependiente=True it must be computed without gastos de difícil justificación.
+    rendimientos_trabajo — rendimientos netos reducidos del trabajo, already after arts. 19–20
+    (as in the tax return).
+    trabajo_integro — rendimientos íntegros del trabajo without Seguridad Social contributions:
+    pension plan payouts, pensions. Otros gastos (19.2.f) and reducción art. 20 are subtracted;
+    the art. 20 threshold uses only them, so do not mix with rendimientos_trabajo.
+    otras_rentas_general — anything else in the general base (e.g. rendimiento inmobiliario).
+    rcm, ganancias — savings base saldos for the year (may be < 0).
+    deducciones — deducciones summed by half (estatal / autonómica), entered by the user.
+    pendientes_* — loss carry-forward from prior years (`pendientes_vacios`); None — none.
 
-    Не моделируется: reducción art. 32.1 (rentas irregulares), ganancias в общей базе,
-    перенос неиспользованных aportaciones (art. 52.2), pensiones compensatorias (art. 55).
+    Not modelled: reducción art. 32.1 (rentas irregulares), ganancias in the general base,
+    carry-forward of unused aportaciones (art. 52.2), pensiones compensatorias (art. 55).
     """
     ps = rules.reducciones.prevision_social
 
@@ -158,7 +158,7 @@ def irpf_anual(
 
 @dataclass(frozen=True, slots=True)
 class RentasMiembro:
-    """Rentas одного супруга для `irpf_conjunta`. Смысл полей — как в `irpf_anual`."""
+    """Rentas of one spouse for `irpf_conjunta`. Fields mean the same as in `irpf_anual`."""
 
     rendimiento_actividad: float = 0.0
     rendimientos_trabajo: float = 0.0
@@ -182,17 +182,18 @@ def irpf_conjunta(
     pendientes_general=None,
     pendientes_ahorro=None,
 ) -> IrpfAnual:
-    """IRPF за год в tributación conjunta, unidad familiar biparental (arts. 82.1.1.ª, 84 LIRPF).
+    """IRPF for a year in tributación conjunta, unidad familiar biparental (arts. 82.1.1.ª, 84).
 
-    Rentas супругов складываются (84.5); лимиты не умножаются на число членов (84.2), поэтому
-    reducciones art. 32 считаются один раз по сумме rendimientos. Исключение — лимиты планов
-    пенсий: они применяются к каждому участнику отдельно (84.2.1º). До reducciones arts. 51–54
-    база уменьшается на reduccion_biparental (84.2.3º). minimo — из `minimo_conjunta`.
-    dependiente, discapacidad, inicio_actividad — для reducción art. 32 всей unidad familiar.
-    pendientes_* — общий перенос убытков unidad familiar (84.3).
-    trabajo_integro — один otros gastos 19.2.f и одна reducción art. 20 на сумму unidad familiar
-    (84.2; Manual práctico 2025, cap. 3: «se aplican por unidad familiar», reducción — «en
-    función de la cuantía conjunta» без умножения на число членов).
+    Spouses' rentas are added up (84.5); limits are not multiplied by the number of members
+    (84.2), so art. 32 reducciones are computed once on the sum of rendimientos. The exception
+    is pension plan limits: they apply to each member separately (84.2.1º). Before the
+    arts. 51–54 reducciones the base is reduced by reduccion_biparental (84.2.3º).
+    minimo — from `minimo_conjunta`.
+    dependiente, discapacidad, inicio_actividad — for the art. 32 reducción of the whole unit.
+    pendientes_* — shared loss carry-forward of the unidad familiar (84.3).
+    trabajo_integro — one otros gastos 19.2.f and one reducción art. 20 on the unit's total
+    (84.2; Manual práctico 2025, cap. 3: «se aplican por unidad familiar», reducción «en
+    función de la cuantía conjunta» without multiplying by the number of members).
     """
     ps = rules.reducciones.prevision_social
 
@@ -200,8 +201,8 @@ def irpf_conjunta(
         return sum(np.asarray(getattr(m, campo), dtype=float) for m in miembros)
 
     def prevision(_rn_reducido, _trabajo):
-        # TODO: verify — 30 % (art. 52.1.a) считаем от собственных rendimientos каждого
-        # супруга без reducciones arts. 20 и 32: в conjunta они одни на всю unidad familiar.
+        # TODO: verify — 30 % (art. 52.1.a) of each spouse's own rendimientos without the
+        # arts. 20 and 32 reducciones: in conjunta they apply once per unidad familiar.
         return sum(
             reduccion_prevision_social(
                 m.aportacion_pensiones,
@@ -253,8 +254,9 @@ def _irpf(
     pendientes_general,
     pendientes_ahorro,
 ) -> IrpfAnual:
-    """Общий расчёт individual и conjunta. prevision(rn_reducido, trabajo) — reducción por
-    planes de pensiones до ограничения базой; reduccion_conjunta — art. 84.2.3º (0 в individual)."""
+    """Shared individual and conjunta calculation. prevision(rn_reducido, trabajo) — reducción
+    por planes de pensiones before the base cap; reduccion_conjunta — art. 84.2.3º (0 in
+    individual)."""
     r = rules.reducciones
     if pendientes_general is None:
         pendientes_general = pendientes_vacios(r.compensacion, ahorro=False)
@@ -264,7 +266,7 @@ def _irpf(
         deducciones = Mitades(estatal=0.0, autonomica=0.0)
 
     rn = np.asarray(rendimiento_actividad, dtype=float)
-    # Порог art. 20 — алгебраическая сумма прочих rentas, actividades без reducciones art. 32
+    # Art. 20 threshold — algebraic sum of other rentas, actividades before art. 32 reducciones
     # (Manual práctico 2025, cap. 3, fase 3).
     gastos_trab, red_trab, trabajo_reducido = rendimiento_trabajo(
         trabajo_integro, rn + otras_rentas_general + rcm + ganancias, r.trabajo
@@ -286,17 +288,17 @@ def _irpf(
     )
     rn_reducido = rn - red_act
 
-    # Art. 48.a: rendimientos общей базы компенсируются между собой без ограничений.
+    # Art. 48.a: rendimientos of the general base offset each other without limit.
     big = rn_reducido + trabajo + otras_rentas_general
     ahorro = base_imponible_ahorro(rcm, ganancias, pendientes_ahorro, r.compensacion)
 
-    # Art. 84.2.3º: сначала общая база (не ниже 0), остаток — база сбережений (не ниже 0).
+    # Art. 84.2.3º: general base first (not below 0), the rest from the savings base (not below 0).
     conj_general = np.minimum(reduccion_conjunta, np.maximum(big, 0.0))
     conj_ahorro = np.minimum(reduccion_conjunta - conj_general, ahorro.base_imponible)
     big_reducida = big - conj_general
 
-    # Art. 50.1: reducciones не могут сделать базу отрицательной.
-    # TODO: verify — 30 % (art. 52.1.a) от trabajo после reducción art. 20, как у actividad.
+    # Art. 50.1: reducciones cannot make the base negative.
+    # TODO: verify — 30 % (art. 52.1.a) of trabajo after the art. 20 reducción, as for actividad.
     red_ps = np.minimum(prevision(rn_reducido, trabajo), np.maximum(big_reducida, 0.0))
     general = compensar_base_liquidable_general(
         big_reducida - red_ps, pendientes_general, r.compensacion
@@ -305,7 +307,7 @@ def _irpf(
     blg = general.base_liquidable
     bla = _out(ahorro.base_imponible - conj_ahorro)
     ci = cuota_integra(blg, bla, minimo, rules)
-    # Cuota líquida каждой половины не может быть отрицательной.
+    # The cuota líquida of each half cannot be negative.
     cl = Mitades(
         estatal=_out(np.maximum(ci.estatal - deducciones.estatal, 0.0)),
         autonomica=_out(np.maximum(ci.autonomica - deducciones.autonomica, 0.0)),

@@ -1,5 +1,5 @@
-// Вкладка «Accounts»: счета Wealthfolio → испанские типы и владельцы, сводка по типам.
-// Стоимость в модели (остаток + позиции по лотам) сверяется с оценкой Wealthfolio.
+// "Accounts" tab: Wealthfolio accounts → Spanish types and owners, summary by type.
+// The model value (balance + positions by lots) is checked against the Wealthfolio valuation.
 import {
   Select,
   SelectContent,
@@ -37,14 +37,14 @@ const modelValue = (a: WfAccount) => a.cash + a.positions.reduce((s, p) => s + p
 const costBasis = (a: WfAccount) =>
   a.cash + a.positions.reduce((s, p) => s + p.lots.reduce((c, l) => c + l.cost, 0), 0);
 
-/** Расхождение меньше полуевро — совпадает. */
+/** A difference under half a euro counts as a match. */
 const matches = (a: WfAccount) => Math.abs(modelValue(a) - a.wfValue) < 0.5;
 
 export function AccountsTab({ portfolio, settings, people, currency, onChange }: Props) {
   const money = (v: number) => formatMoney(v, currency);
   const update = (a: WfAccount, patch: { kind?: SpanishKind; owner?: Owner }) => {
     const next = { ...settingFor(settings, a), ...patch };
-    // План пенсий — всегда одного человека.
+    // A pension plan always belongs to one person.
     if (isPension(next.kind) && next.owner === 'joint') next.owner = 0;
     onChange({ ...settings, [a.id]: next });
   };

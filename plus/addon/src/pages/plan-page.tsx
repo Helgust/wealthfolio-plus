@@ -1,5 +1,5 @@
-// Страница плана в раскладке ProjectionLab: график net worth, ключевые метрики, вкладки.
-// Работают «Accounts», «Taxes» и «Table»; Plan, Cash flow, Monte Carlo — заглушки.
+// Plan page in the ProjectionLab layout: net worth chart, key metrics, tabs.
+// "Accounts", "Taxes" and "Table" work; Plan, Cash flow, Monte Carlo are stubs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -72,7 +72,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
     [portfolio.data, settings.data],
   );
   const result = useMemo(() => (plan && start ? runPlan(plan, start) : null), [plan, start]);
-  // Для пары считаем и другой вид декларации — сравнение на вкладке «Taxes».
+  // For a couple, also compute the other filing type — compared on the "Taxes" tab.
   const alternative = useMemo<PlanResult | null>(() => {
     if (!plan || !start || plan.people.length !== 2) return null;
     return runPlan(plan, start, plan.filing === 'joint' ? 'individual' : 'joint');

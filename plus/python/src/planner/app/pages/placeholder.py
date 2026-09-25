@@ -1,4 +1,4 @@
-"""Разделы, которые появятся на следующих шагах дорожной карты (docs/architecture.md)."""
+"""Sections that come in later roadmap steps (docs/architecture.md)."""
 
 from __future__ import annotations
 

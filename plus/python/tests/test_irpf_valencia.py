@@ -1,4 +1,4 @@
-"""Автономная половина (Comunitat Valenciana), mínimos и загрузка правил по годам."""
+"""Regional half (Comunitat Valenciana), mínimos and loading rules by year."""
 
 import pytest
 
@@ -18,7 +18,7 @@ def r2026():
     return load_irpf_rules(2026)
 
 
-# --- Шкала Валенсии: накопленные cuotas из официальных таблиц -----------------
+# --- Valencian scale: accumulated cuotas from the official tables ---------------
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_minimo_contribuyente_by_age(r2026, edad, estatal, autonomica):
 
 
 def test_minimo_two_children_shared_between_parents(r2026):
-    # Старший (5 лет) — «первый», младший (2 года) — «второй» + прибавка до 3 лет; делится 50/50.
+    # The older (5) is the "first", the younger (2) the "second" + under-3 increment; split 50/50.
     kids = [Familiar(edad=2, share=0.5), Familiar(edad=5, share=0.5)]
     m = minimo_personal_familiar(Persona(edad=35), r2026, descendientes=kids)
     assert m.estatal == pytest.approx(5_550 + (2_400 + 2_700 + 2_800) * 0.5)
@@ -76,9 +76,9 @@ def test_minimo_fourth_and_later_children_use_last_amount(r2026):
 
 def test_minimo_descendiente_age_and_income_limits(r2026):
     kids = [
-        Familiar(edad=26),  # слишком взрослый
-        Familiar(edad=20, renta_anual=9_000),  # доходы выше лимита 8000
-        Familiar(edad=30, discapacidad=Discapacidad.GRADO_33),  # есть discapacidad: без лимита
+        Familiar(edad=26),  # too old
+        Familiar(edad=20, renta_anual=9_000),  # income above the 8,000 limit
+        Familiar(edad=30, discapacidad=Discapacidad.GRADO_33),  # has discapacidad: no age limit
     ]
     m = minimo_personal_familiar(Persona(edad=55), r2026, descendientes=kids)
     assert m.estatal == 5_550 + 2_400 + 3_000
@@ -94,14 +94,14 @@ def test_minimo_ascendientes(r2026):
     parents = [
         Familiar(edad=70),  # 1150
         Familiar(edad=80),  # 1150 + 1400
-        Familiar(edad=60),  # моложе 65 без discapacidad — не даёт права
-        Familiar(edad=70, renta_anual=10_000),  # доходы выше лимита
+        Familiar(edad=60),  # under 65 without discapacidad — no right
+        Familiar(edad=70, renta_anual=10_000),  # income above the limit
     ]
     m = minimo_personal_familiar(Persona(edad=45), r2026, ascendientes=parents)
     assert m.estatal == 5_550 + 1_150 + 1_150 + 1_400
 
 
-# --- Cuota íntegra по двум половинам ------------------------------------------
+# --- Cuota íntegra for both halves ------------------------------------------------
 
 
 def test_cuota_integra_autonomo_30k_single(r2026):
@@ -113,7 +113,7 @@ def test_cuota_integra_autonomo_30k_single(r2026):
     assert c.total == pytest.approx(3_055.5 + 2_856.76)
 
 
-# --- Правила по годам ---------------------------------------------------------
+# --- Rules by year ----------------------------------------------------------------
 
 
 def test_future_year_uses_latest_rules():
@@ -122,7 +122,7 @@ def test_future_year_uses_latest_rules():
 
 
 def test_year_before_any_rules_fails():
-    with pytest.raises(ValueError, match="нет налоговых правил"):
+    with pytest.raises(ValueError, match="no tax rules"):
         rules_for_year(1990)
 
 

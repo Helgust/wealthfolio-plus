@@ -1,5 +1,5 @@
-// Настройки Prettier из корня Wealthfolio, но без переноса строк в Markdown:
-// хук Claude Code из .claude/settings.json форматирует каждый изменённый файл.
+// Prettier settings from the Wealthfolio root, but without wrapping Markdown prose:
+// the Claude Code hook from .claude/settings.json formats every changed file.
 const base = require("../.prettierrc.cjs");
 
 const isMarkdown = (override) =>

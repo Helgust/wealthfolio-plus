@@ -1,8 +1,8 @@
-"""Налоговые правила IRPF за год как типизированный объект + проекция на будущие годы.
+"""IRPF tax rules for a year as a typed object + projection to future years.
 
-Числа живут только в rules/<год>/*.yaml. Для года, которого нет в rules/, берётся
-последний доступный год; индексировать ли его пороги на инфляцию — решение сценария
-(шкалы в Испании сами не индексируются), поэтому здесь только механизм `indexed(factor)`.
+Numbers live only in rules/<year>/*.yaml. For a year missing from rules/, the latest available
+year is used; whether to index its thresholds to inflation is a scenario decision (Spanish scales
+are not indexed automatically), so only the `indexed(factor)` mechanism lives here.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class ContribuyenteAmounts(_Frozen):
 
 
 class DescendientesAmounts(_Frozen):
-    por_orden: list[float]  # последний элемент — для 4-го и всех следующих
+    por_orden: list[float]  # the last element is for the 4th and all following
     menor_3: float
 
 
@@ -43,7 +43,7 @@ class AscendientesAmounts(_Frozen):
 
 
 class MinimoAmounts(_Frozen):
-    """Суммы mínimo personal y familiar одной половины IRPF."""
+    """Mínimo personal y familiar amounts of one IRPF half."""
 
     contribuyente: ContribuyenteAmounts
     descendientes: DescendientesAmounts
@@ -75,7 +75,7 @@ class MinimoConditions(_Frozen):
 
 
 class IrpfHalf(_Frozen):
-    """Одна половина IRPF: шкалы общей базы и базы сбережений + суммы mínimo."""
+    """One IRPF half: general and savings base scales + mínimo amounts."""
 
     general: Scale
     ahorro: Scale
@@ -90,8 +90,8 @@ class IrpfHalf(_Frozen):
 
 
 class GastosDificilJustificacion(_Frozen):
-    rate: float  # доля rendimiento neto (без самого этого concepto)
-    limit: float  # евро в год
+    rate: float  # share of rendimiento neto (without this concepto itself)
+    limit: float  # euros per year
 
 
 class ActividadRules(_Frozen):
@@ -107,11 +107,11 @@ class ActividadRules(_Frozen):
 
 
 class RetaTramo(_Frozen):
-    """Tramo de rendimientos netos. Все суммы — евро в месяц."""
+    """Tramo de rendimientos netos. All amounts are euros per month."""
 
     tabla: Literal["reducida", "general"]
     tramo: int
-    upto: float | None  # верхняя граница rendimiento; None — без ограничения
+    upto: float | None  # upper bound of the rendimiento; None — unbounded
     inclusive: bool = True  # «≤ upto»; False — «< upto»
     base_min: float
     base_max: float
@@ -136,23 +136,23 @@ class RetaTipos(_Frozen):
 class RetaRules(_Frozen):
     """Cotización RETA por rendimientos reales (art. 308 LGSS)."""
 
-    gastos_genericos: float  # deducción от rendimiento computable
-    base_maxima: float  # евро в месяц
+    gastos_genericos: float  # deducción from rendimiento computable
+    base_maxima: float  # euros per month
     tipos: RetaTipos
-    tramos: list[RetaTramo]  # по возрастанию rendimientos: reducida 1–3, general 1–12
+    tramos: list[RetaTramo]  # ascending by rendimientos: reducida 1–3, general 1–12
 
     @model_validator(mode="after")
     def _check_tramos(self) -> RetaRules:
         uptos = [t.upto for t in self.tramos]
         if uptos[-1] is not None or None in uptos[:-1]:
-            raise ValueError("только последний tramo может быть без верхней границы")
+            raise ValueError("only the last tramo may have no upper bound")
         if any(a >= b for a, b in pairwise(uptos[:-1])):
-            raise ValueError("границы tramos должны строго возрастать")
-        # Монотонность баз по tramos нужна для однозначного выбора tramo (см. autonomo.reta).
+            raise ValueError("tramo bounds must be strictly increasing")
+        # Bases must not decrease across tramos so the tramo choice is unique (autonomo.reta).
         for key in ("base_min", "base_max"):
             vals = [getattr(t, key) for t in self.tramos]
             if any(a > b for a, b in pairwise(vals)):
-                raise ValueError(f"{key} должна не убывать по tramos")
+                raise ValueError(f"{key} must not decrease across tramos")
         return self
 
     def indexed(self, f: float) -> RetaRules:
@@ -174,7 +174,7 @@ class RetaRules(_Frozen):
 
 
 def _scaled(m: _Frozen, f: float, *fields: str) -> _Frozen:
-    """Копия модели, где денежные поля fields умножены на f."""
+    """Copy of the model with the money fields in fields multiplied by f."""
     return m.model_copy(update={k: getattr(m, k) * f for k in fields})
 
 
@@ -231,7 +231,7 @@ class ReduccionesActividad(_Frozen):
 
 
 class PrevisionSocial(_Frozen):
-    """Лимиты reducción por aportaciones a planes de pensiones (arts. 51.6, 52.1)."""
+    """Limits of the reducción por aportaciones a planes de pensiones (arts. 51.6, 52.1)."""
 
     limite_general: float
     incremento_autonomo: float
@@ -242,7 +242,7 @@ class PrevisionSocial(_Frozen):
 
 
 class ReduccionTrabajo(_Frozen):
-    """Art. 20 LIRPF: три участка — плато, затем два линейных спада до 0 на rend_max."""
+    """Art. 20 LIRPF: three segments — a plateau, then two linear declines to 0 at rend_max."""
 
     rend_max: float
     otras_rentas_max: float
@@ -255,7 +255,7 @@ class ReduccionTrabajo(_Frozen):
 
 
 class Trabajo(_Frozen):
-    """Rendimientos del trabajo: otros gastos (art. 19.2.f) и reducción art. 20."""
+    """Rendimientos del trabajo: otros gastos (art. 19.2.f) and reducción art. 20."""
 
     otros_gastos: float
     reduccion: ReduccionTrabajo
@@ -307,9 +307,9 @@ class Reducciones(_Frozen):
 
 
 class IrpfRules(_Frozen):
-    """Все налоговые правила года: IRPF (две половины, mínimos, actividad, reducciones) и RETA."""
+    """All tax rules of a year: IRPF (two halves, mínimos, actividad, reducciones) and RETA."""
 
-    year: int  # год, из которого взяты правила (не обязательно год расчёта)
+    year: int  # year the rules come from (not necessarily the tax year)
     estatal: IrpfHalf
     autonomica: IrpfHalf
     condiciones: MinimoConditions
@@ -318,7 +318,7 @@ class IrpfRules(_Frozen):
     reta: RetaRules
 
     def indexed(self, f: float) -> IrpfRules:
-        """Все денежные пороги × f (возрасты не трогаем). f=1 — правила как есть."""
+        """All money thresholds × f (ages are left alone). f=1 — rules as is."""
         if f == 1.0:
             return self
         c = self.condiciones
@@ -339,7 +339,7 @@ def available_years() -> list[int]:
 
 @cache
 def load_irpf_rules(year: int) -> IrpfRules:
-    """Правила ровно за year. FileNotFoundError, если rules/<year>/ не заполнен."""
+    """Rules for exactly year. FileNotFoundError if rules/<year>/ is not filled in."""
     ahorro = load_rules(year, "ahorro")
     minimos = load_rules(year, "minimos")
     return IrpfRules(
@@ -362,12 +362,12 @@ def load_irpf_rules(year: int) -> IrpfRules:
 
 
 def rules_for_year(year: int) -> IrpfRules:
-    """Правила для расчёта года year: сам год или последний доступный до него.
+    """Rules for computing year: that year or the latest available before it.
 
-    Будущие годы получают замороженные правила последнего известного года;
-    индексацию (если сценарий её хочет) вызывающий делает через `.indexed(factor)`.
+    Future years get the frozen rules of the last known year; indexing (if the scenario
+    wants it) is done by the caller via `.indexed(factor)`.
     """
     past = [y for y in available_years() if y <= year]
     if not past:
-        raise ValueError(f"нет налоговых правил на {year} или раньше (есть: {available_years()})")
+        raise ValueError(f"no tax rules for {year} or earlier (available: {available_years()})")
     return load_irpf_rules(past[-1])

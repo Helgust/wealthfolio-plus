@@ -1,5 +1,5 @@
-# Государственная половина шкалы общей базы IRPF (art. 63 LIRPF).
-# Без изменений с 2021 г. TODO: verify для 2026 по BOE/AEAT.
+# State half of the IRPF general base scale (art. 63 LIRPF).
+# Unchanged since 2021. TODO: verify for 2026 against BOE/AEAT.
 scale:
   - {upto: 12450,  rate: 0.095}
   - {upto: 20200,  rate: 0.12}

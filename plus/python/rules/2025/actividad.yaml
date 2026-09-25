@@ -1,9 +1,9 @@
 # Rendimiento neto de actividades económicas — estimación directa simplificada.
-# Provisiones deducibles + gastos de difícil justificación: процент от rendimiento neto
-# (без самого этого concepto), не больше лимита в год.
-# Источник: art. 30.2.2.ª RIRPF (RD 439/2007); лимит 2 000 € — art. 28.1.4.ª LIRPF.
-# Сверено: AEAT, Manual práctico IRPF 2025, «Principales novedades — rendimiento de actividades
-# económicas» (5 % в 2025). В 2023 было 7 % (DA 56.ª LIRPF) — только за тот год.
+# Provisiones deducibles + gastos de difícil justificación: a percentage of rendimiento neto
+# (without this concepto itself), capped at a yearly limit.
+# Source: art. 30.2.2.ª RIRPF (RD 439/2007); the 2,000 € limit — art. 28.1.4.ª LIRPF.
+# Checked: AEAT, Manual práctico IRPF 2025, «Principales novedades — rendimiento de actividades
+# económicas» (5 % in 2025). In 2023 it was 7 % (DA 56.ª LIRPF) — for that year only.
 estimacion_directa_simplificada:
   gastos_dificil_justificacion:
     rate: 0.05

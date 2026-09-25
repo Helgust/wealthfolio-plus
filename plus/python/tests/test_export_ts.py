@@ -1,4 +1,4 @@
-"""Выгрузка для аддона (rules JSON и golden-фикстуры) совпадает с текущим кодом и правилами."""
+"""The addon export (rules JSON and golden fixtures) matches the current code and rules."""
 
 from planner.export_ts import all_files
 
@@ -9,4 +9,4 @@ def test_export_for_addon_is_up_to_date():
         for path, text in all_files().items()
         if not path.exists() or path.read_text(encoding="utf-8") != text
     ]
-    assert not stale, "устарело, запустите python -m planner.export_ts: " + ", ".join(stale)
+    assert not stale, "stale, run python -m planner.export_ts: " + ", ".join(stale)

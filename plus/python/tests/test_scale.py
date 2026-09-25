@@ -40,7 +40,7 @@ def test_bracket_boundary(general_estatal):
 
 
 def test_apply_vectorized(general_estatal):
-    # Накопленные cuotas из таблицы AEAT (art. 63.1 LIRPF)
+    # Accumulated cuotas from the AEAT table (art. 63.1 LIRPF)
     bases = np.array([0, 12_450, 30_000, 300_000])
     expected = [0, 1182.75, 3582.75, 62950.75]
     np.testing.assert_allclose(general_estatal.apply(bases), expected)
@@ -52,7 +52,7 @@ def test_apply_scalar_returns_float(general_estatal):
 
 def test_marginal_rate(general_estatal):
     assert general_estatal.marginal_rate(0) == 0.095
-    assert general_estatal.marginal_rate(12_450) == 0.12  # следующий евро — уже 2-я ступень
+    assert general_estatal.marginal_rate(12_450) == 0.12  # the next euro is in the 2nd bracket
     assert general_estatal.marginal_rate(1e9) == 0.245
 
 
@@ -66,7 +66,7 @@ def test_scaled_moves_bounds_not_rates(general_estatal):
 @pytest.mark.parametrize(
     "brackets",
     [
-        [{"upto": 100, "rate": 0.1}],  # последняя ступень ограничена
+        [{"upto": 100, "rate": 0.1}],  # the last bracket is bounded
         [{"upto": 200, "rate": 0.1}, {"upto": 100, "rate": 0.2}, {"upto": None, "rate": 0.3}],
         [{"upto": None, "rate": 0.1}, {"upto": None, "rate": 0.2}],
     ],
@@ -77,7 +77,7 @@ def test_invalid_scale_rejected(brackets):
 
 
 def test_ahorro_total_10k(ahorro_estatal, ahorro_autonomica):
-    # 6000*0.19 + 4000*0.21 в сумме двух половин
+    # 6000*0.19 + 4000*0.21 summed over both halves
     total = ahorro_estatal.apply(10_000) + ahorro_autonomica.apply(10_000)
     assert total == pytest.approx(1980.0)
 
@@ -89,7 +89,7 @@ def test_minimo_applies_to_general_first(general_estatal, ahorro_estatal):
 
 
 def test_minimo_remainder_goes_to_ahorro(general_estatal, ahorro_estatal):
-    # Общей базы нет -> весь mínimo уходит в базу сбережений: 990 - 527.25
+    # No general base -> the whole mínimo goes to the savings base: 990 - 527.25
     cuota = cuota_integra_mitad(0, 10_000, 5_550, general_estatal, ahorro_estatal)
     assert cuota == pytest.approx(462.75)
 

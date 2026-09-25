@@ -1,4 +1,4 @@
-# Отдельный workspace: зависимости аддона не попадают в pnpm-lock.yaml Wealthfolio.
+# Separate workspace: addon dependencies stay out of the Wealthfolio pnpm-lock.yaml.
 packages: []
 
 ignoredBuiltDependencies:

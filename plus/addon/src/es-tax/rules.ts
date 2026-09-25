@@ -1,10 +1,10 @@
-// Налоговые правила года. Единственный источник — plus/python/rules/<год>/*.yaml; JSON рядом —
-// их копия, проверенная pydantic (`python -m planner.export_ts`). Здесь только типы и выбор года.
+// Tax rules of a year. The only source is plus/python/rules/<year>/*.yaml; the JSON next to this
+// file is their pydantic-validated copy (`python -m planner.export_ts`). Only types and year selection here.
 import rules2025 from './rules/2025.json';
 import rules2026 from './rules/2026.json';
 
 export interface Bracket {
-  upto: number | null; // верхняя граница ступени, null — без ограничения
+  upto: number | null; // upper bound of the bracket, null — unbounded
   rate: number;
 }
 
@@ -46,7 +46,7 @@ export interface ActividadRules {
 export interface RetaTramo {
   tabla: 'reducida' | 'general';
   tramo: number;
-  upto: number | null; // евро в месяц
+  upto: number | null; // euros per month
   inclusive: boolean;
   base_min: number;
   base_max: number;
@@ -82,7 +82,7 @@ export interface ReduccionesActividad {
   inicio_actividad: { rate: number; base_max: number };
 }
 
-/** Art. 20 LIRPF: плато, затем два линейных спада до 0 на rend_max. */
+/** Art. 20 LIRPF: a plateau, then two linear declines to 0 at rend_max. */
 export interface ReduccionTrabajo {
   rend_max: number;
   otras_rentas_max: number;
@@ -94,7 +94,7 @@ export interface ReduccionTrabajo {
   pendiente_quiebra: number;
 }
 
-/** Rendimientos del trabajo: otros gastos (art. 19.2.f) и reducción art. 20. */
+/** Rendimientos del trabajo: otros gastos (art. 19.2.f) and reducción art. 20. */
 export interface Trabajo {
   otros_gastos: number;
   reduccion: ReduccionTrabajo;
@@ -112,7 +112,7 @@ export interface Compensacion {
 }
 
 export interface IrpfRules {
-  year: number; // год, из которого взяты правила (не обязательно год расчёта)
+  year: number; // year the rules come from (not necessarily the tax year)
   estatal: IrpfHalf;
   autonomica: IrpfHalf;
   condiciones: MinimoConditions;
@@ -133,7 +133,7 @@ export function availableYears(): number[] {
   return RULES.map((r) => r.year);
 }
 
-/** Правила ровно за year. */
+/** Rules for exactly year. */
 export function loadIrpfRules(year: number): IrpfRules {
   const rules = RULES.find((r) => r.year === year);
   if (!rules) throw new Error(`no tax rules for ${year}`);
@@ -141,8 +141,8 @@ export function loadIrpfRules(year: number): IrpfRules {
 }
 
 /**
- * Правила для расчёта года year: сам год или последний доступный до него. Будущие годы получают
- * замороженные правила последнего известного года (шкалы в Испании сами не индексируются).
+ * Rules for computing year: that year or the latest available before it. Future years get the
+ * frozen rules of the last known year (Spanish scales are not indexed automatically).
  */
 export function rulesForYear(year: number): IrpfRules {
   const past = RULES.filter((r) => r.year <= year);

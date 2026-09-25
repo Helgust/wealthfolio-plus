@@ -1,10 +1,10 @@
-// Порт planner.tax.reducciones: reducciones общей базы (arts. 19.2.f, 20, 32, 51–52 LIRPF).
+// Port of planner.tax.reducciones: general base reducciones (arts. 19.2.f, 20, 32, 51–52 LIRPF).
 import type { Discapacidad } from './minimos';
 import type { PrevisionSocial, ReduccionesActividad, Trabajo, TramoDecreciente } from './rules';
 
 const clip = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), hi);
 
-/** importe до plano_hasta, затем линейно убывает до 0. */
+/** importe up to plano_hasta, then decreases linearly to 0. */
 function tramoDecreciente(x: number, t: TramoDecreciente): number {
   return clip(t.importe - t.pendiente * Math.max(x - t.plano_hasta, 0), 0, t.importe);
 }
@@ -16,9 +16,9 @@ export interface RendimientoTrabajo {
 }
 
 /**
- * Rendimiento neto reducido del trabajo без взносов в Seguridad Social (выплаты планов пенсий,
- * пенсии): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20). otrasRentas —
- * алгебраическая сумма прочих rentas no exentas (порог art. 20).
+ * Rendimiento neto reducido del trabajo without Seguridad Social contributions (pension plan
+ * payouts, pensions): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20). otrasRentas —
+ * algebraic sum of other rentas no exentas (art. 20 threshold).
  */
 export function rendimientoTrabajo(
   integro: number,
@@ -35,19 +35,19 @@ export function rendimientoTrabajo(
         ? r.importe - r.pendiente * (integro - r.plano_hasta)
         : r.importe_quiebra - r.pendiente_quiebra * (integro - r.quiebra);
   if (!(integro < r.rend_max && otrasRentas <= r.otras_rentas_max)) red = 0;
-  // Art. 20: saldo после reducción не может быть отрицательным.
+  // Art. 20: the saldo after the reducción cannot be negative.
   red = clip(red, 0, positivo - gastos);
   return { otros_gastos: gastos, reduccion: red, neto_reducido: integro - gastos - red };
 }
 
 export interface ReduccionActividadOpts {
-  otrasRentas?: number; // rentas no exentas помимо деятельности
-  dependiente?: boolean; // выполнены требования 32.2.2º
+  otrasRentas?: number; // rentas no exentas besides the activity
+  dependiente?: boolean; // the 32.2.2º requirements are met
   discapacidad?: Discapacidad;
   inicioActividad?: boolean; // 32.3
 }
 
-/** Сумма reducciones art. 32.2 и 32.3; не больше положительного rendimiento. */
+/** Sum of the art. 32.2 and 32.3 reducciones; not above the positive rendimiento. */
 export function reduccionActividad(
   rendimientoNeto: number,
   rules: ReduccionesActividad,
@@ -64,7 +64,7 @@ export function reduccionActividad(
       (rendimientoNeto < a.rend_max && otrasRentas <= a.otras_rentas_max
         ? tramoDecreciente(rendimientoNeto, a)
         : 0);
-    // TODO: verify — суммируется ли 32.2.1º.b с .a (как в Python-эталоне).
+    // TODO: verify — whether 32.2.1º.b adds to .a (as in the Python reference).
     if (discapacidad === 'grado_65') red += d.discapacidad_65;
     else if (discapacidad === 'grado_33') red += d.discapacidad_33;
   } else {
@@ -83,7 +83,7 @@ export function reduccionActividad(
 
 /**
  * Reducción por aportaciones a planes de pensiones (arts. 51.6, 52.1). aportacionAutonomo —
- * в planes de empleo simplificados: сначала свой incremento, остаток — в общий лимит.
+ * to planes de empleo simplificados: fills its own incremento first, the rest goes to the general limit.
  */
 export function reduccionPrevisionSocial(
   aportacion: number,

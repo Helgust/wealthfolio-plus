@@ -1,7 +1,8 @@
-"""Autónomo: rendimiento neto (estimación directa simplificada) и cuota RETA за год.
+"""Autónomo: rendimiento neto (estimación directa simplificada) and the RETA cuota for a year.
 
-Всё считается за полный год в alta; суммы годовые, кроме базы RETA (евро в месяц,
-как в таблицах). Аргументы — числа или numpy-массивы одинаковой формы (траектории).
+Everything is computed for a full year in alta; amounts are yearly, except the RETA base
+(euros per month, as in the tables). Arguments are numbers or numpy arrays of the same shape
+(trajectories).
 """
 
 from __future__ import annotations
@@ -20,18 +21,18 @@ def _out(x):
 def gastos_dificil_justificacion(rendimiento_previo, rules: ActividadRules):
     """Provisiones + gastos de difícil justificación (art. 30.2.2.ª RIRPF).
 
-    Процент от положительного rendimiento neto «без этого concepto», не больше лимита.
+    Percentage of the positive rendimiento neto "without this concepto", capped at the limit.
     """
     g = rules.gastos_dificil_justificacion
     return _out(np.minimum(g.rate * np.maximum(rendimiento_previo, 0.0), g.limit))
 
 
 def rendimiento_neto(ingresos, gastos, rules: ActividadRules, gastos_dificil: bool = True):
-    """Rendimiento neto IRPF в estimación directa simplificada.
+    """IRPF rendimiento neto in estimación directa simplificada.
 
-    gastos — все вычитаемые расходы года, включая cuota RETA (она gasto deducible).
-    gastos_dificil=False — без gastos de difícil justificación (обязательно при reducción
-    art. 32.2.1º LIRPF). Может быть отрицательным.
+    gastos — all deductible expenses of the year, including the RETA cuota (a gasto deducible).
+    gastos_dificil=False — without gastos de difícil justificación (required with reducción
+    art. 32.2.1º LIRPF). May be negative.
     """
     previo = np.asarray(ingresos, dtype=float) - gastos
     if not gastos_dificil:
@@ -40,12 +41,12 @@ def rendimiento_neto(ingresos, gastos, rules: ActividadRules, gastos_dificil: bo
 
 
 def reta_tramo(rendimiento_mensual, rules: RetaRules):
-    """Индекс tramo в `rules.tramos` для rendimiento computable в месяц."""
+    """Index of the tramo in `rules.tramos` for a monthly rendimiento computable."""
     r = np.asarray(rendimiento_mensual, dtype=float)[..., None]
     bounds = rules.tramos[:-1]
     uppers = np.array([t.upto for t in bounds])
     inclusive = np.array([t.inclusive for t in bounds])
-    # Номер tramo = сколько верхних границ rendimiento уже превысил.
+    # Tramo number = how many upper bounds the rendimiento has already exceeded.
     exceeded = np.where(inclusive, r > uppers, r >= uppers)
     idx = exceeded.sum(axis=-1)
     return int(idx) if np.ndim(rendimiento_mensual) == 0 else idx
@@ -53,34 +54,34 @@ def reta_tramo(rendimiento_mensual, rules: RetaRules):
 
 @dataclass(frozen=True, slots=True)
 class Actividad:
-    """Итог года по деятельности autónomo. Поля — числа или массивы (траектории)."""
+    """Year result of the autónomo activity. Fields are numbers or arrays (trajectories)."""
 
     ingresos: float
-    gastos: float  # без RETA
-    cuota_reta: float  # в год
+    gastos: float  # excluding RETA
+    cuota_reta: float  # per year
     gastos_dificil_justificacion: float
-    rendimiento_neto: float  # IRPF, идёт в общую базу
-    rendimiento_computable: float  # для RETA, в год (после gastos genéricos)
-    reta_tramo: int  # индекс в rules.reta.tramos
-    reta_base: float  # евро в месяц
+    rendimiento_neto: float  # IRPF, goes to the general base
+    rendimiento_computable: float  # for RETA, per year (after gastos genéricos)
+    reta_tramo: int  # index into rules.reta.tramos
+    reta_base: float  # euros per month
 
 
 def actividad(
     ingresos, gastos, rules: IrpfRules, base_elegida=None, gastos_dificil: bool = True
 ) -> Actividad:
-    """Rendimiento neto и cuota RETA за год с учётом их взаимной зависимости.
+    """Rendimiento neto and RETA cuota for the year, accounting for their mutual dependency.
 
-    cuota RETA — gasto deducible, поэтому уменьшает rendimiento neto; а tramo RETA
-    выбирается по rendimiento computable = (rendimiento neto + cuota RETA) × (1 − gastos
-    genéricos) / 12 (art. 308.1.c LGSS). Круг разрываем перебором: для каждого tramo k
-    считаем cuota по его базе и проверяем, что rendimiento попадает в тот же tramo k.
-    Выбор tramo не убывает по k (больше cuota → меньше gastos de difícil justificación →
-    больше rendimiento computable), поэтому согласованный tramo всегда есть; берём
-    наименьший.
+    The RETA cuota is a gasto deducible, so it lowers the rendimiento neto; the RETA tramo is
+    chosen by rendimiento computable = (rendimiento neto + RETA cuota) × (1 − gastos genéricos)
+    / 12 (art. 308.1.c LGSS). The loop is broken by enumeration: for each tramo k compute the
+    cuota from its base and check that the rendimiento falls into the same tramo k.
+    The chosen tramo does not decrease with k (higher cuota → lower gastos de difícil
+    justificación → higher rendimiento computable), so a consistent tramo always exists; the
+    smallest one is taken.
 
-    base_elegida — база в месяц, выбранная autónomo (None — минимальная). После
-    regularización она прижимается к [base_min, base_max] фактического tramo.
-    gastos — расходы без cuota RETA. gastos_dificil — см. `rendimiento_neto`.
+    base_elegida — monthly base chosen by the autónomo (None — the minimum). After
+    regularización it is clamped to [base_min, base_max] of the actual tramo.
+    gastos — expenses excluding the RETA cuota. gastos_dificil — see `rendimiento_neto`.
     """
     reta = rules.reta
     ingresos_arr = np.asarray(ingresos, dtype=float)
@@ -94,7 +95,7 @@ def actividad(
     neto_k = rendimiento_neto(antes_reta, cuota_k, rules.actividad, gastos_dificil)  # (..., K)
     computable_k = (neto_k + cuota_k) * (1 - reta.gastos_genericos)
     consistent = reta_tramo(computable_k / 12, reta) == np.arange(len(reta.tramos))
-    k = np.argmax(consistent, axis=-1)  # первый согласованный tramo
+    k = np.argmax(consistent, axis=-1)  # first consistent tramo
 
     def pick(a):
         a = np.broadcast_to(a, consistent.shape)

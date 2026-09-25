@@ -1,4 +1,4 @@
-// Раздел редактора плана: доходности по типам счетов, flows профицита и порядок изъятий.
+// Plan editor section: returns by account type, surplus flows and withdrawal order.
 import {
   Button,
   Select,

@@ -1,7 +1,7 @@
-"""Reducciones общей базы: rendimientos del trabajo (arts. 19.2.f, 20), actividades (art. 32),
-планы пенсий (arts. 51–52).
+"""General base reducciones: rendimientos del trabajo (arts. 19.2.f, 20), actividades (art. 32),
+pension plans (arts. 51–52).
 
-Аргументы — числа или numpy-массивы одинаковой формы (траектории).
+Arguments are numbers or numpy arrays of the same shape (trajectories).
 """
 
 from __future__ import annotations
@@ -17,17 +17,17 @@ def _out(x):
 
 
 def _tramo_decreciente(x, plano_hasta: float, importe: float, pendiente: float):
-    """importe до plano_hasta, затем линейно убывает до 0."""
+    """importe up to plano_hasta, then decreases linearly to 0."""
     return np.clip(importe - pendiente * np.maximum(x - plano_hasta, 0.0), 0.0, importe)
 
 
 def rendimiento_trabajo(integro, otras_rentas, rules: Trabajo):
-    """Rendimiento neto reducido del trabajo без взносов в Seguridad Social (выплаты планов
-    пенсий, пенсии): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20).
+    """Rendimiento neto reducido del trabajo without Seguridad Social contributions (pension
+    plan payouts, pensions): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20).
 
-    otras_rentas — алгебраическая сумма прочих rentas no exentas (для порога art. 20).
-    Возвращает (otros_gastos, reduccion, neto_reducido). Gastos 19.2.a–e для этих доходов нулевые,
-    поэтому rendimiento для порогов art. 20 равен íntegro.
+    otras_rentas — algebraic sum of other rentas no exentas (for the art. 20 threshold).
+    Returns (otros_gastos, reduccion, neto_reducido). Gastos 19.2.a–e are zero for this income,
+    so the rendimiento for the art. 20 thresholds equals the íntegro.
     """
     integro = np.asarray(integro, dtype=float)
     otras = np.asarray(otras_rentas, dtype=float)
@@ -44,7 +44,7 @@ def rendimiento_trabajo(integro, otras_rentas, rules: Trabajo):
         ),
     )
     red = np.where((integro < r.rend_max) & (otras <= r.otras_rentas_max), red, 0.0)
-    # Art. 20: saldo после reducción не может быть отрицательным.
+    # Art. 20: the saldo after the reducción cannot be negative.
     red = np.clip(red, 0.0, positivo - gastos)
     return _out(gastos), _out(red), _out(integro - gastos - red)
 
@@ -58,13 +58,13 @@ def reduccion_actividad(
     discapacidad: Discapacidad = Discapacidad.NINGUNA,
     inicio_actividad: bool = False,
 ):
-    """Сумма reducciones art. 32.2 и 32.3 LIRPF к rendimiento neto de actividades.
+    """Sum of the art. 32.2 and 32.3 LIRPF reducciones on rendimiento neto de actividades.
 
-    otras_rentas — rentas no exentas помимо деятельности (для порогов 6 500 и 12 000 €).
-    dependiente — выполнены все требования 32.2.2º (тогда rendimiento должен быть посчитан
-    без gastos de difícil justificación). inicio_actividad — первый год с положительным
-    rendimiento или следующий за ним (32.3).
-    Результат не больше положительного rendimiento: reducción не делает его отрицательным.
+    otras_rentas — rentas no exentas besides the activity (for the 6,500 and 12,000 € thresholds).
+    dependiente — all 32.2.2º requirements are met (then the rendimiento must be computed
+    without gastos de difícil justificación). inicio_actividad — first year with a positive
+    rendimiento or the one after it (32.3).
+    The result is not above the positive rendimiento: the reducción cannot make it negative.
     """
     rn = np.asarray(rendimiento_neto, dtype=float)
     otras = np.asarray(otras_rentas, dtype=float)
@@ -78,7 +78,7 @@ def reduccion_actividad(
             _tramo_decreciente(rn, a.plano_hasta, a.importe, a.pendiente),
             0.0,
         )
-        # TODO: verify — суммируется ли 32.2.1º.b с .a (читаем «adicionalmente» как да).
+        # TODO: verify — whether 32.2.1º.b adds to .a (we read «adicionalmente» as yes).
         if discapacidad == Discapacidad.GRADO_65:
             red = red + d.discapacidad_65
         elif discapacidad == Discapacidad.GRADO_33:
@@ -104,11 +104,11 @@ def reduccion_prevision_social(
 ):
     """Reducción por aportaciones a planes de pensiones (arts. 51.6, 52.1 LIRPF).
 
-    aportacion — в обычные планы (индивидуальные и т. п.), лимит limite_general.
-    aportacion_autonomo — в planes de empleo simplificados / sectoriales для autónomos:
-    сначала заполняют свой incremento, остаток помещается в общий лимит.
-    Итог не больше porcentaje_rendimientos от rendimientos netos trabajo + actividades.
-    Остаток сверх лимитов пропадает (перенос art. 52.2 на 5 лет пока не моделируется).
+    aportacion — to regular plans (individual etc.), limit limite_general.
+    aportacion_autonomo — to planes de empleo simplificados / sectoriales for autónomos:
+    fills its own incremento first, the rest goes to the general limit.
+    The total is not above porcentaje_rendimientos of rendimientos netos trabajo + actividades.
+    Anything above the limits is lost (the 5-year carry-forward of art. 52.2 is not modelled yet).
     """
     general = np.asarray(aportacion, dtype=float)
     autonomo = np.asarray(aportacion_autonomo, dtype=float)

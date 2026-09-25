@@ -1,30 +1,30 @@
-// Счета в проекции: позиции с лотами, рост, покупка, продажа по FIFO, traspaso между фондами.
-// Все суммы — в базовой валюте (евро); стоимость приобретения лота — историческая, в евро.
+// Accounts in the projection: positions with lots, growth, buying, FIFO selling, traspaso between funds.
+// All amounts are in base currency (euros); lot cost basis is historical, in euros.
 import type { Owner, SpanishKind } from '../model/accounts';
 
 export interface Lot {
-  /** Дата приобретения, ISO; задаёт порядок FIFO */
+  /** Acquisition date, ISO; sets the FIFO order */
   date: string;
   units: number;
-  /** Стоимость приобретения всего лота, € */
+  /** Cost basis of the whole lot, € */
   cost: number;
 }
 
 export interface Position {
   name: string;
-  /** Цена пая, € */
+  /** Unit price, € */
   price: number;
-  /** От старшего к младшему */
+  /** Oldest first */
   lots: Lot[];
 }
 
 export interface Account {
-  /** id счёта Wealthfolio */
+  /** Wealthfolio account id */
   id: string;
   name: string;
   kind: Exclude<SpanishKind, 'other'>;
   owner: Owner;
-  /** Деньги без лотов: CASH-счёт целиком или свободный остаток брокерского счёта */
+  /** Money without lots: a whole CASH account or the free balance of a brokerage account */
   cash: number;
   positions: Position[];
 }
@@ -43,15 +43,15 @@ export function cloneAccount(a: Account): Account {
   };
 }
 
-/** Рост цены всех позиций счёта; свободный остаток не растёт. */
+/** Grows the price of every position in the account; the free balance does not grow. */
 export function grow(a: Account, rate: number): void {
   for (const p of a.positions) p.price *= 1 + rate;
 }
 
 /**
- * Взнос в счёт. CASH-счёт — остаток; иначе покупка пропорционально стоимости позиций (доли
- * портфеля сохраняются), новый лот в каждой позиции. Пустой счёт получает позицию «New
- * contributions» с ценой 1.
+ * Contribution to an account. A CASH account gets balance; otherwise buys pro rata to position
+ * values (portfolio weights are kept), one new lot per position. An empty account gets a "New
+ * contributions" position priced at 1.
  */
 export function deposit(a: Account, amount: number, date: string): void {
   if (amount <= 0) return;
@@ -72,7 +72,7 @@ export function deposit(a: Account, amount: number, date: string): void {
   });
 }
 
-/** Продать units паёв позиции по FIFO; стоимость приобретения проданного. */
+/** Sells units of a position FIFO; returns the cost basis of what was sold. */
 function sellUnits(p: Position, units: number): number {
   let left = units;
   let cost = 0;
@@ -95,13 +95,13 @@ function sellUnits(p: Position, units: number): number {
 
 export interface Sale {
   proceeds: number;
-  /** Стоимость приобретения проданного */
+  /** Cost basis of what was sold */
   cost: number;
 }
 
 /**
- * Вывести до amount из счёта: сначала свободный остаток, затем продажа пропорционально стоимости
- * позиций, внутри позиции — по FIFO. Прирост = proceeds − cost.
+ * Takes up to amount out of the account: free balance first, then sells pro rata to position
+ * values, FIFO within a position. Gain = proceeds − cost.
  */
 export function withdraw(a: Account, amount: number): Sale {
   const fromCash = Math.min(Math.max(a.cash, 0), Math.max(amount, 0));
@@ -122,9 +122,9 @@ export function withdraw(a: Account, amount: number): Sale {
 }
 
 /**
- * Traspaso между фондами (art. 94.1.a LIRPF): паи from продаются по FIFO на сумму value, на эту
- * сумму покупаются паи to. Налогового события нет: лоты переходят с датами и стоимостью
- * приобретения, пересчитаны только количества паёв.
+ * Traspaso between funds (art. 94.1.a LIRPF): units of from are sold FIFO for value, and that
+ * amount buys units of to. No taxable event: lots move with their acquisition dates and cost
+ * basis; only unit counts are recalculated.
  */
 export function traspaso(from: Position, to: Position, value: number): void {
   const units = Math.min(value / from.price, positionUnits(from));

@@ -1,7 +1,7 @@
-// Фаза 0: черновой движок для замера скорости в песочнице аддона.
-// Не модель — только нагрузка, похожая на будущий годовой цикл: генерация доходностей,
-// прогрессивная шкала по двум половинам, база сбережений, поиск tramo RETA.
-// Числа шкал — условные, для нагрузки; настоящие правила появятся в фазе 1 из plus/python/rules.
+// Phase 0: draft engine for measuring speed in the addon sandbox.
+// Not a model — only a load resembling the future yearly loop: return generation,
+// progressive scale for both halves, savings base, RETA tramo search.
+// Scale numbers are arbitrary, for load only; the real rules come in phase 1 from plus/python/rules.
 
 interface Bracket {
   upTo: number;
@@ -46,7 +46,7 @@ function retaCuota(monthly: number): number {
   return RETA_TRAMOS[RETA_TRAMOS.length - 1].cuota * 12;
 }
 
-// mulberry32 — детерминированный генератор, чтобы прогоны были воспроизводимы.
+// mulberry32 — deterministic generator so runs are reproducible.
 function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {

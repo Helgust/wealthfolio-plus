@@ -1,6 +1,6 @@
-"""Цвета и общие настройки графиков (эталонная палитра dataviz, светлая тема)."""
+"""Colors and shared chart settings (dataviz reference palette, light theme)."""
 
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # фиксированный порядок, не циклить
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]  # fixed order, never cycle
 TEXT_PRIMARY = "#0b0b0b"
 TEXT_SECONDARY = "#52514e"
 GRID = "#e6e5e1"

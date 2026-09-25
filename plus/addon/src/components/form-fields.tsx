@@ -1,4 +1,4 @@
-// Поля форм редактора плана.
+// Form fields of the plan editor.
 import { Input, Label } from '@wealthfolio/ui';
 import type { ReactNode } from 'react';
 
@@ -30,7 +30,7 @@ export function NumberInput({
   );
 }
 
-/** Процент в поле, доля в модели. */
+/** Percent in the field, fraction in the model. */
 export function PercentInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <NumberInput

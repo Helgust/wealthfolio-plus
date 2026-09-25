@@ -1,28 +1,28 @@
-# Mínimo personal y familiar (arts. 56–61 LIRPF). Суммы в евро в год.
-# Каждая половина IRPF (estatal / autonómica) считает mínimo по своим суммам (art. 56.3 LIRPF);
-# автономия вправе менять суммы не более чем на ±10 % (Ley 22/2009, art. 46).
+# Mínimo personal y familiar (arts. 56–61 LIRPF). Amounts in euros per year.
+# Each IRPF half (estatal / autonómica) computes the mínimo with its own amounts (art. 56.3 LIRPF);
+# a region may change the amounts by at most ±10 % (Ley 22/2009, art. 46).
 
 estatal:
-  # Сверено: AEAT, Manual práctico IRPF 2025, «Cuadro resumen del mínimo personal y familiar».
+  # Checked: AEAT, Manual práctico IRPF 2025, «Cuadro resumen del mínimo personal y familiar».
   contribuyente:
     general: 5550          # art. 57.1
-    mayor_65: 1150         # art. 57.2 — прибавка
-    mayor_75: 1400         # art. 57.2 — дополнительная прибавка сверх mayor_65
-  descendientes:           # art. 58.1 — по порядку детей
-    por_orden: [2400, 2700, 4000, 4500]   # 1-й, 2-й, 3-й, 4-й и следующие
-    menor_3: 2800          # art. 58.2 — прибавка на ребёнка младше 3 лет
+    mayor_65: 1150         # art. 57.2 — increment
+    mayor_75: 1400         # art. 57.2 — additional increment on top of mayor_65
+  descendientes:           # art. 58.1 — by child order
+    por_orden: [2400, 2700, 4000, 4500]   # 1st, 2nd, 3rd, 4th and following
+    menor_3: 2800          # art. 58.2 — increment per child under 3
   ascendientes:            # art. 59
     general: 1150
     mayor_75: 1400
-  discapacidad:            # art. 60 — одинаково для contribuyente / descendiente / ascendiente
+  discapacidad:            # art. 60 — same for contribuyente / descendiente / ascendiente
     grado_33: 3000         # 33 % ≤ grado < 65 %
     grado_65: 9000         # grado ≥ 65 %
-    asistencia: 3000       # прибавка: нужна помощь третьих лиц / ограниченная мобильность или ≥65 %
+    asistencia: 3000       # increment: needs third-party help / reduced mobility or ≥65 %
 
 autonomica:
   # Comunitat Valenciana: art. 2 bis Ley 13/1997 (GVA).
-  # Сверено: AEAT, Manual práctico IRPF 2025, «Comunitat Valenciana: importes del mínimo personal y familiar».
-  # TODO: verify для 2026 — Ley 5/2026 по сводке GVA (novetats-tributaries-2026) mínimos не меняла.
+  # Checked: AEAT, Manual práctico IRPF 2025, «Comunitat Valenciana: importes del mínimo personal y familiar».
+  # TODO: verify for 2026 — per the GVA summary (novetats-tributaries-2026) Ley 5/2026 did not change mínimos.
   contribuyente:
     general: 6105
     mayor_65: 1265
@@ -38,10 +38,10 @@ autonomica:
     grado_65: 9900
     asistencia: 3300
 
-# Условия применения — общие для обеих половин (государственные нормы).
+# Conditions of application — shared by both halves (state rules).
 condiciones:
-  edad_mayor_65: 65          # arts. 57.2, 59.1: возраст на дату devengo (31.12, art. 61)
-  edad_mayor_75: 75          # TODO: verify — граница включительно (AEAT: «65 años o más» на 31.12)
-  descendiente_edad_max: 25  # art. 58.1: младше 25 лет (или с discapacidad — любой возраст)
+  edad_mayor_65: 65          # arts. 57.2, 59.1: age on the devengo date (31.12, art. 61)
+  edad_mayor_75: 75          # TODO: verify — bound inclusive (AEAT: «65 años o más» on 31.12)
+  descendiente_edad_max: 25  # art. 58.1: under 25 (or any age with discapacidad)
   descendiente_menor: 3      # art. 58.2
-  renta_max_familiar: 8000   # arts. 58.1, 59.1: годовые доходы иждивенца без exentas, не выше
+  renta_max_familiar: 8000   # arts. 58.1, 59.1: dependant's yearly income excluding exentas, at most

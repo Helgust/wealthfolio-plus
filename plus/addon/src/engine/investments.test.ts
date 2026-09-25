@@ -1,4 +1,4 @@
-// Движок фазы 2: счета, flows профицита, лимиты планов пенсий, изъятия с gross-up, перенос убытков.
+// Phase 2 engine: accounts, surplus flows, pension plan limits, withdrawals with gross-up, loss carry-forward.
 import { describe, expect, it } from 'vitest';
 import {
   actividad,
@@ -18,7 +18,7 @@ function plan(overrides: Partial<Plan> = {}): Plan {
   return { ...defaultPlan(2026), returns: ZERO_RETURNS, ...overrides };
 }
 
-/** Пенсионер 70 лет без дохода, расходы amount в год. */
+/** Retiree aged 70 with no income, spending amount per year. */
 function retiree(amount: number, overrides: Partial<Plan> = {}): Plan {
   return plan({
     people: [{ name: 'R', birthYear: 1956, disability: 'ninguna', autonomo: null }],
@@ -59,7 +59,7 @@ describe('returns', () => {
     expect(row.balances.brokerage).toBeCloseTo(10_400, 9);
     expect(row.balances.fund).toBeCloseTo(10_500, 9);
     expect(row.balances.pension).toBeCloseTo(10_600, 9);
-    // Доход в пределах mínimo: налога нет, проценты и дивиденды остаются в cash.
+    // Income within the mínimo: no tax, interest and dividends stay in cash.
     expect(row.irpf).toBe(0);
     expect(row.balances.cash).toBeCloseTo(10_500, 9);
     expect(row.netWorth).toBeCloseTo(row.otherAssets + 10_500 + 10_400 + 10_500 + 10_600, 9);
@@ -109,7 +109,7 @@ describe('surplus flows', () => {
       aportacion_pensiones_autonomo: 5_750,
     });
     expect(row.irpf).toBeCloseTo(total(expected.cuota_liquida), 6);
-    // Экономия на налоге остаётся в cash.
+    // The tax saving stays in cash.
     expect(row.balances.cash).toBeCloseTo(row.netCashFlow - 5_750, 6);
   });
 

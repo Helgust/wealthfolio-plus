@@ -1,4 +1,4 @@
-"""Браузерное приложение (NiceGUI). Только отображение.
+"""Browser app (NiceGUI). Display only.
 
-Вся логика — в planner.tax и planner.reports.
+All logic lives in planner.tax and planner.reports.
 """

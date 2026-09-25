@@ -1,7 +1,7 @@
 [project]
 name = "spain-planner"
 version = "0.1.0"
-description = "Личный финансовый планировщик с учётом испанских налогов"
+description = "Personal financial planner with Spanish taxes"
 requires-python = ">=3.12"
 dependencies = [
     "nicegui>=3.0",
@@ -42,5 +42,5 @@ target-version = "py312"
 [tool.ruff.lint]
 # pyflakes, pycodestyle, isort, pyupgrade, bugbear, simplify, pytest, numpy, ruff-specific
 select = ["F", "E", "W", "I", "UP", "B", "SIM", "PT", "NPY", "RUF"]
-# кириллица в строках и комментариях — норма для проекта
+# ambiguous Unicode is intentional: ×, −, «» in comments, Russian UI strings of the frozen app
 ignore = ["RUF001", "RUF002", "RUF003"]

@@ -1,6 +1,6 @@
-// Порт planner.tax.compensacion: зачёт убытков с переносом на 4 года (arts. 49, 50.3 LIRPF).
-// Состояние — суммы убытков по годам происхождения, от старшего к младшему. Для базы
-// сбережений — две корзины: [RCM, GP].
+// Port of planner.tax.compensacion: loss offsetting with a 4-year carry-forward (arts. 49, 50.3 LIRPF).
+// State — loss amounts by year of origin, oldest first. The savings base has two baskets:
+// [RCM, GP].
 import type { Compensacion } from './rules';
 
 export type PendientesGeneral = number[];
@@ -17,7 +17,7 @@ export function pendientesVaciosAhorro(rules: Compensacion): PendientesAhorro {
   return [new Array(rules.anos).fill(0), new Array(rules.anos).fill(0)];
 }
 
-/** Списать до importe из корзин (старшие первыми); списанное по корзинам. */
+/** Consumes up to importe from the baskets (oldest first); returns the amount used per basket. */
 function consumir(importe: number, pendientes: number[]): number[] {
   let antes = 0;
   return pendientes.map((p) => {
@@ -27,7 +27,7 @@ function consumir(importe: number, pendientes: number[]): number[] {
   });
 }
 
-/** Сдвиг на год: старший выбывает, в конец — убытки текущего года. */
+/** Shifts one year: the oldest drops out, the current year's losses go to the end. */
 const avanzar = (pendientes: number[], nuevas: number) => [...pendientes.slice(1), nuevas];
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -39,9 +39,9 @@ export interface BaseAhorro {
 }
 
 /**
- * Base imponible del ahorro с зачётом убытков. Фаза 1: убыток одной корзины гасится
- * положительным saldo другой в пределах limite_cruzado. Фаза 2: прошлые убытки — своей
- * корзиной целиком, затем другой в пределах остатка того же лимита.
+ * Base imponible del ahorro with loss offsetting. Step 1: a loss in one basket is offset by the
+ * other basket's positive saldo within limite_cruzado. Step 2: prior losses — against their own
+ * basket in full, then against the other within what is left of the same limit.
  */
 export function baseImponibleAhorro(
   rcm: number,
@@ -91,7 +91,7 @@ export interface BaseGeneral {
   pendientes: PendientesGeneral;
 }
 
-/** Отрицательная base liquidable general переносится на 4 года (art. 50.3). */
+/** A negative base liquidable general is carried forward 4 years (art. 50.3). */
 export function compensarBaseLiquidableGeneral(
   baseLiquidable: number,
   pendientes: PendientesGeneral,

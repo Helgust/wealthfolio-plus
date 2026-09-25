@@ -1,4 +1,4 @@
-// Вкладка «Taxes»: IRPF по половинам и RETA по годам; сравнение individual и conjunta для пары.
+// "Taxes" tab: IRPF by half and RETA by year; individual vs conjunta comparison for a couple.
 import { Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import {
   Bar,
@@ -15,7 +15,7 @@ import {
 import type { LedgerRow, PlanResult } from '../engine/run-plan';
 import { formatMoney, formatPercent, inMode, type ValueMode } from '../lib/format';
 
-// Порядок стека — снизу вверх; соседние цвета проверены на различимость (CVD, normal vision).
+// Stack order is bottom to top; adjacent colors checked for distinguishability (CVD, normal vision).
 const config = {
   irpfAutonomica: { label: 'IRPF autonómica', color: 'var(--chart-2)' },
   irpfEstatal: { label: 'IRPF estatal', color: 'var(--chart-1)' },
@@ -25,7 +25,7 @@ const KEYS = Object.keys(config) as (keyof typeof config)[];
 
 interface Props {
   result: PlanResult;
-  /** Тот же план с другим видом декларации; null — в плане один человек */
+  /** The same plan with the other filing type; null — the plan has one person */
   alternative: PlanResult | null;
   currency: string;
   mode: ValueMode;

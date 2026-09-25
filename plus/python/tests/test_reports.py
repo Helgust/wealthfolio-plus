@@ -67,7 +67,7 @@ def test_irpf_anual_breakdown_rows():
     )
     names = [r["name"] for r in b.base_rows()]
     assert "Reducción planes de pensiones" in names
-    assert "Reducción art. 32 LIRPF" not in names  # нулевые вычеты скрыты
+    assert "Reducción art. 32 LIRPF" not in names  # zero deductions are hidden
     bases = {r["name"]: r["amount"] for r in b.base_rows()}
     assert bases["Base liquidable general"] == 38_500
     assert b.rows()[-1]["name"] == "Cuota líquida"

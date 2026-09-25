@@ -1,7 +1,7 @@
-// Порт planner.tax.scale: прогрессивная шкала.
+// Port of planner.tax.scale: progressive scale.
 import type { Scale } from './rules';
 
-/** Налог по прогрессивной шкале на base (евро). Отрицательная база — 0. */
+/** Tax on base (euros) under a progressive scale. A negative base gives 0. */
 export function applyScale(scale: Scale, base: number): number {
   let tax = 0;
   let lower = 0;
@@ -13,7 +13,7 @@ export function applyScale(scale: Scale, base: number): number {
   return tax;
 }
 
-/** Ставка ступени, в которую попадает следующий евро сверх base. */
+/** Rate of the bracket the next euro above base falls into. */
 export function marginalRate(scale: Scale, base: number): number {
   const b = scale.brackets.find((x) => x.upto === null || base < x.upto);
   return b!.rate;

@@ -1,4 +1,4 @@
-"""Точка входа и общий каркас: шапка + навигация по разделам в духе ProjectionLab."""
+"""Entry point and shared frame: header + section navigation in the ProjectionLab style."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from nicegui import ui
 
 from planner.app.pages import placeholder, taxes
 
-# (путь, иконка Material, название, страница)
+# (path, Material icon, title, page)
 SECTIONS = [
     ("/", "dashboard", "Обзор", placeholder.overview),
     ("/current", "account_balance", "Текущие финансы", placeholder.current_finances),
@@ -41,7 +41,7 @@ def main() -> None:
     ui.run(
         root,
         title="spain-planner",
-        host="127.0.0.1",  # личные финансы — только локально, не в сеть
+        host="127.0.0.1",  # personal finances — local only, not on the network
         port=int(os.environ.get("PLANNER_PORT", "8080")),
         language="ru",
         reload=False,

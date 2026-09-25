@@ -1,7 +1,7 @@
-// Годовой движок, детерминированный. Порядок шагов года — plus/docs/architecture.md §3.4:
-// доходы счетов и рост → доход autónomo и RETA → расходы → IRPF → профицит по flows или дефицит
-// из счетов по порядку изъятий с gross-up налога. Налог платится в том же году. Суммы
-// номинальные; deflator переводит их в евро первого года плана.
+// Deterministic yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
+// account income and growth → autónomo income and RETA → expenses → IRPF → surplus through flows,
+// or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
+// Amounts are nominal; deflator converts them to euros of the plan's first year.
 import {
   actividad,
   irpfAnual,
@@ -22,10 +22,10 @@ import { isPension, type Owner } from '../model/accounts';
 import type { Filing, Plan } from '../model/plan';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
 
-/** Текущие финансы из Wealthfolio на старт плана (базовая валюта). */
+/** Current finances from Wealthfolio at the plan start (base currency). */
 export interface StartingPoint {
   netWorth: number;
-  /** Счета в модели; всё остальное (other, альтернативные активы, долги) стоит на месте */
+  /** Modelled accounts; everything else (other, alternative assets, debts) stays constant */
   accounts: Account[];
 }
 
@@ -34,7 +34,7 @@ export interface PersonYear {
   revenue: number;
   businessExpenses: number;
   cuotaReta: number;
-  /** Например, «general 3»; null — дохода autónomo нет */
+  /** E.g. "general 3"; null — no autónomo income */
   retaTramo: string | null;
   rendimientoNeto: number;
 }
@@ -55,27 +55,27 @@ export interface LedgerRow {
   irpfEstatal: number;
   irpfAutonomica: number;
   irpf: number;
-  /** Суммы по декларациям года */
+  /** Sums over the year's tax returns */
   baseLiquidableGeneral: number;
   baseLiquidableAhorro: number;
   essentialExpenses: number;
   discretionaryExpenses: number;
-  /** Проценты и дивиденды, выплаченные в денежный поток */
+  /** Interest and dividends paid into the cash flow */
   investmentIncome: number;
-  /** Прирост (убыток) от продаж — база сбережений */
+  /** Gain (loss) from sales — savings base */
   realizedGains: number;
   pensionContributions: number;
-  /** Выплаты из планов пенсий — rendimientos del trabajo */
+  /** Pension plan payouts — rendimientos del trabajo */
   pensionWithdrawals: number;
-  /** Доходы − расходы − налоги, до flows и изъятий */
+  /** Income − expenses − taxes, before flows and withdrawals */
   netCashFlow: number;
   balances: Balances;
-  /** Сумма CASH-счетов; < 0 — деньги кончились, дефицит в долг */
+  /** Sum of CASH accounts; < 0 — money ran out, the deficit is debt */
   cash: number;
-  /** Всё вне модели; не меняется */
+  /** Everything outside the model; does not change */
   otherAssets: number;
   netWorth: number;
-  /** Номинал ÷ deflator = евро первого года плана */
+  /** Nominal ÷ deflator = euros of the plan's first year */
   deflator: number;
 }
 
@@ -89,7 +89,7 @@ interface Carry {
   ahorro?: PendientesAhorro;
 }
 
-/** Доходы человека за год помимо деятельности и взносы в планы пенсий — для IRPF. */
+/** A person's income for the year besides the activity, and pension plan contributions — for IRPF. */
 interface PersonRentas {
   rcm: number;
   ganancias: number;
@@ -100,19 +100,19 @@ interface PersonRentas {
 
 const emptyRentas = (): PersonRentas => ({ rcm: 0, ganancias: 0, trabajo: 0, ppi: 0, ppes: 0 });
 
-/** Счёт для остатка профицита и нехватки денег, если в модели нет CASH-счёта. */
+/** Account for leftover surplus and shortfalls when the model has no CASH account. */
 export const SINK_ID = '__cash';
 
 const KIND_ORDER: Record<Account['kind'], number> = { cash: 0, fund: 1, brokerage: 2, ppi: 3, ppes: 3 };
 
-/** Доли людей в доходах счёта: совместный — поровну. */
+/** People's shares in an account's income: a joint account splits equally. */
 function ownerShares(owner: Owner, n: number): number[] {
   if (owner === 'joint') return new Array(n).fill(1 / n);
   const i = owner < n ? owner : 0;
   return Array.from({ length: n }, (_, j) => (j === i ? 1 : 0));
 }
 
-/** План пенсий — всегда одного человека; совместный считается планом первого. */
+/** A pension plan always belongs to one person; a joint one counts as the first person's. */
 const pensionOwner = (owner: Owner, n: number) => (owner === 'joint' || owner >= n ? 0 : owner);
 
 function childrenAsFamiliares(plan: Plan, year: number, share: number): Familiar[] {
@@ -126,7 +126,7 @@ export function endYear(plan: Plan): number {
   return Math.min(...plan.people.map((p) => p.birthYear)) + plan.endAge;
 }
 
-/** Порядок изъятий: из плана (счета вне списка не трогаются) или cash → fondos → брокерский → планы пенсий. */
+/** Withdrawal order: from the plan (accounts not listed are never touched) or cash → fondos → brokerage → pension plans. */
 export function withdrawalOrder(plan: Plan, accounts: Account[]): Account[] {
   if (plan.withdrawalOrder.length) {
     return plan.withdrawalOrder
@@ -136,7 +136,7 @@ export function withdrawalOrder(plan: Plan, accounts: Account[]): Account[] {
   return [...accounts].sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
 }
 
-/** Остаток вычитаемых взносов человека в планы пенсий за год (arts. 51.6, 52.1 LIRPF). */
+/** A person's remaining deductible pension plan contributions for the year (arts. 51.6, 52.1 LIRPF). */
 interface PensionRoom {
   general: number;
   incremento: number;
@@ -147,7 +147,7 @@ function roomFor(kind: 'ppi' | 'ppes', r: PensionRoom): number {
   return Math.min(kind === 'ppes' ? r.general + r.incremento : r.general, r.tope);
 }
 
-/** PPES сначала занимает свой incremento, остаток — общий лимит. */
+/** PPES uses its own incremento first, then the general limit. */
 function useRoom(kind: 'ppi' | 'ppes', r: PensionRoom, c: number): void {
   const inc = kind === 'ppes' ? Math.min(c, r.incremento) : 0;
   r.incremento -= inc;
@@ -155,7 +155,7 @@ function useRoom(kind: 'ppi' | 'ppes', r: PensionRoom, c: number): void {
   r.tope -= c;
 }
 
-/** Прогон плана по годам. filing по умолчанию — из плана; другой — для сравнения деклараций. */
+/** Runs the plan year by year. filing defaults to the plan's; the other one is for comparing returns. */
 export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.filing): PlanResult {
   if (filing === 'joint' && plan.people.length !== 2) {
     throw new Error('Joint filing needs two people');
@@ -180,7 +180,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     const deflator = (1 + plan.inflation) ** t;
     const ages = plan.people.map((p) => year - p.birthYear);
 
-    // Доходы счетов — от стоимости на начало года, затем рост цен.
+    // Account income — on start-of-year value, then price growth.
     const base = plan.people.map(emptyRentas);
     let investmentIncome = 0;
     for (const a of accounts) {
@@ -194,7 +194,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       ownerShares(a.owner, n).forEach((s, i) => (base[i].rcm += income * s));
     }
 
-    // Доход autónomo и RETA.
+    // Autónomo income and RETA.
     const acts = plan.people.map((p, i) => {
       const inc = p.autonomo;
       if (!inc || ages[i] >= inc.untilAge) return null;
@@ -207,7 +207,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       asistencia: false,
     }));
 
-    // Расходы домохозяйства — в ценах первого года, растут с инфляцией.
+    // Household expenses — in first-year prices, growing with inflation.
     let essential = 0;
     let discretionary = 0;
     for (const e of plan.expenses) {
@@ -240,7 +240,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
     let pensionWithdrawals = 0;
 
     if (cf0 - taxed.irpf >= 0) {
-      // Профицит → flows по порядку; остаток и экономия на налоге от взносов — в cash.
+      // Surplus → flows in order; the rest and the tax saving from contributions → cash.
       const prev = rules.reducciones.prevision_social;
       const room: PensionRoom[] = acts.map((act) => ({
         general: prev.limite_general,
@@ -278,8 +278,8 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
       }
       sink().cash += budget;
     } else {
-      // Дефицит → изъятия по порядку. Продажа и выплата плана пенсий добавляют налог, поэтому
-      // сумма изъятия — неподвижная точка x = налог(x) − cf0; итерации сходятся монотонно снизу.
+      // Deficit → withdrawals in order. Sales and pension payouts add tax, so the amount to
+      // withdraw is the fixed point x = tax(x) − cf0; iterations converge monotonically from below.
       let x = taxed.irpf - cf0;
       let trial = accounts;
       let raised = 0;
@@ -302,7 +302,7 @@ export function runPlan(plan: Plan, start: StartingPoint, filing: Filing = plan.
         x = need;
       }
       accounts = trial;
-      // Счета кончились: нехватка уходит в минус на cash.
+      // Accounts ran out: the shortfall makes cash negative.
       if (need - raised > 1e-6) sink().cash -= need - raised;
     }
     carries = taxed.carries;
@@ -345,7 +345,7 @@ interface Drawdown {
   trabajo: number[];
 }
 
-/** Вывести amount из счетов по порядку; прирост и выплаты планов пенсий — по людям. */
+/** Takes amount out of accounts in order; gains and pension payouts per person. */
 function drawdown(plan: Plan, order: Account[], amount: number, ages: number[]): Drawdown {
   const n = plan.people.length;
   const out: Drawdown = { raised: 0, ganancias: new Array(n).fill(0), trabajo: new Array(n).fill(0) };
@@ -376,7 +376,7 @@ interface TaxYear {
   jointCarry: Carry;
 }
 
-/** IRPF года для заданных доходов. Перенос убытков не меняет, а возвращает новое состояние. */
+/** IRPF for the year for the given income. Does not mutate the loss carry-forward; returns the new state. */
 function taxYear(
   plan: Plan,
   year: number,
@@ -390,7 +390,7 @@ function taxYear(
 ): TaxYear {
   const rentas: Rentas[] = extra.map((e, i) => ({
     rendimiento_actividad: acts[i]?.rendimiento_neto ?? 0,
-    // Выплаты планов пенсий — rendimientos íntegros del trabajo: otros gastos и reducción art. 20.
+    // Pension plan payouts are rendimientos íntegros del trabajo: otros gastos and reducción art. 20.
     trabajo_integro: e.trabajo,
     rcm: e.rcm,
     ganancias: e.ganancias,
@@ -410,7 +410,7 @@ function taxYear(
       jointCarry: { general: res.pendientes_general, ahorro: res.pendientes_ahorro },
     };
   }
-  // Детей декларируют оба родителя: mínimo por descendientes делится поровну (art. 61).
+  // Both parents declare the children: the mínimo por descendientes is split equally (art. 61).
   const share = 1 / plan.people.length;
   const declaraciones = personas.map((persona, i) =>
     irpfAnual(

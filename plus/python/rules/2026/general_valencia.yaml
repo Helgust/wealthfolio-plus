@@ -1,8 +1,8 @@
-# Автономная половина шкалы общей базы IRPF — Comunitat Valenciana.
-# Источник: art. 2 Ley 13/1997 (GVA) в редакции Ley 5/2026, de 31 de julio (DOGV 10.08.2026),
-# с ретроактивным действием с 01.01.2026.
-# Сверено: https://hisenda.gva.es/es/web/tributos/novetats-tributaries-2026
-# (накопленные cuotas по таблице: 1056 / 2226 / 3686 / 5386 / 7326 / 9516 / 11956 / 19264 / 32939 / 47114).
+# Regional half of the IRPF general base scale — Comunitat Valenciana.
+# Source: art. 2 Ley 13/1997 (GVA) as worded by Ley 5/2026, de 31 de julio (DOGV 10.08.2026),
+# retroactive from 01.01.2026.
+# Checked: https://hisenda.gva.es/es/web/tributos/novetats-tributaries-2026
+# (accumulated cuotas from the table: 1056 / 2226 / 3686 / 5386 / 7326 / 9516 / 11956 / 19264 / 32939 / 47114).
 scale:
   - {upto: 12000,  rate: 0.088}
   - {upto: 22000,  rate: 0.117}

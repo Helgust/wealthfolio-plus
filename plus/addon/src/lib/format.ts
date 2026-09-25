@@ -1,4 +1,4 @@
-// Форматирование сумм для экранов плана. Деньги считаются float, округляются только здесь.
+// Amount formatting for plan screens. Money is computed as float and rounded only here.
 
 export function formatMoney(value: number, currency: string, compact = false): string {
   return new Intl.NumberFormat('en-GB', {
@@ -15,7 +15,7 @@ export function formatPercent(value: number): string {
   );
 }
 
-/** «nominal» — номинальные евро года; «today» — евро первого года плана. */
+/** "nominal" — nominal euros of the year; "today" — euros of the plan's first year. */
 export type ValueMode = 'nominal' | 'today';
 
 export function inMode(value: number, deflator: number, mode: ValueMode): number {

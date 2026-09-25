@@ -1,6 +1,6 @@
 # %% [markdown]
-# # Эффективная ставка налога на базу сбережений
-# Запуск: в VS Code "Run Cell" над ячейкой (Interactive Window).
+# # Effective tax rate on the savings base
+# Run: in VS Code, "Run Cell" above the cell (Interactive Window).
 
 # %%
 import numpy as np
@@ -17,8 +17,8 @@ tax = np.array([estatal.apply(g) + autonomica.apply(g) for g in gains])
 # %%
 fig = go.Figure(go.Scatter(x=gains, y=tax / gains * 100, mode="lines"))
 fig.update_layout(
-    title="База сбережений: эффективная ставка",
-    xaxis_title="Прирост капитала за год, €",
-    yaxis_title="Эффективная ставка, %",
+    title="Savings base: effective rate",
+    xaxis_title="Capital gain for the year, €",
+    yaxis_title="Effective rate, %",
 )
 fig.show()

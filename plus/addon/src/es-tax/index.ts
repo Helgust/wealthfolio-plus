@@ -1,5 +1,5 @@
-// Испанское налоговое ядро — порт planner.tax (plus/python). Сверяется с Python через
-// golden-фикстуры (golden.test.ts).
+// Spanish tax core — port of planner.tax (plus/python). Checked against Python with golden
+// fixtures (golden.test.ts).
 export * from './autonomo';
 export * from './compensacion';
 export * from './irpf';

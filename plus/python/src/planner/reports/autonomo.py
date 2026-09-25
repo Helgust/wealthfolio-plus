@@ -1,4 +1,4 @@
-"""Отчёт по деятельности autónomo для UI: от выручки до rendimiento neto и RETA."""
+"""Autónomo activity report for the UI: from revenue to rendimiento neto and RETA."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ class ActividadBreakdown:
     year: int
     actividad: Actividad
     reta_tramo_label: str  # «general 7»
-    reta_rendimiento_mensual: float  # rendimiento computable / 12 — по нему выбран tramo
+    reta_rendimiento_mensual: float  # rendimiento computable / 12 — the tramo is chosen by it
 
     def rows(self) -> list[dict]:
-        """Цепочка «выручка → rendimiento neto» для таблицы; расходы со знаком минус."""
+        """The "revenue → rendimiento neto" chain for a table; expenses with a minus sign."""
         a = self.actividad
         return [
             {"name": "Ingresos (facturación sin IVA)", "amount": a.ingresos},
@@ -25,7 +25,7 @@ class ActividadBreakdown:
                 "name": "Provisiones y gastos de difícil justificación",
                 "amount": -a.gastos_dificil_justificacion,
             },
-            {"name": "Rendimiento neto (в общую базу IRPF)", "amount": a.rendimiento_neto},
+            {"name": "Rendimiento neto (to the IRPF general base)", "amount": a.rendimiento_neto},
         ]
 
 

@@ -1,4 +1,4 @@
-"""Раздел «Налоги»: autónomo (rendimiento neto + RETA) и IRPF за год по двум половинам."""
+"""«Taxes» section: autónomo (rendimiento neto + RETA) and IRPF for a year by both halves."""
 
 from __future__ import annotations
 
@@ -27,16 +27,16 @@ DISCAPACIDAD_LABELS = {
 
 @dataclass
 class TaxForm:
-    """Состояние формы одной вкладки браузера."""
+    """Form state of one browser tab."""
 
     year: int
-    fuente: str = "autonomo"  # rendimiento neto: "autonomo" — из выручки, "manual" — ввести
+    fuente: str = "autonomo"  # rendimiento neto: "autonomo" — from revenue, "manual" — entered
     ingresos: float = 50_000
-    gastos: float = 6_000  # без cuota RETA
-    base_reta: float | None = None  # база RETA в месяц; пусто — минимальная для tramo
-    rendimiento: float = 40_000  # rendimiento neto actividad в ручном режиме
-    rcm: float = 2_000  # дивиденды и проценты
-    ganancias: float = 0  # прирост / убыток от продаж
+    gastos: float = 6_000  # excluding the RETA cuota
+    base_reta: float | None = None  # monthly RETA base; empty — the tramo minimum
+    rendimiento: float = 40_000  # rendimiento neto actividad in manual mode
+    rcm: float = 2_000  # dividends and interest
+    ganancias: float = 0  # gain / loss from sales
     aportacion_pensiones: float = 0
     aportacion_pensiones_autonomo: float = 0
     deduccion_estatal: float = 0
@@ -45,14 +45,14 @@ class TaxForm:
     inicio_actividad: bool = False  # art. 32.3 LIRPF
     edad: int = 35
     discapacidad: Discapacidad = Discapacidad.NINGUNA
-    hijos: str = ""  # возрасты через запятую
-    hijos_compartidos: bool = True  # оба родителя декларируют отдельно → mínimo делится 50/50
+    hijos: str = ""  # comma-separated ages
+    hijos_compartidos: bool = True  # both parents file separately → mínimo split 50/50
     padres: str = ""
 
 
 def _ages(text: str) -> list[int]:
     parts = [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
-    ages = [int(p) for p in parts]  # ValueError на мусоре — показываем в форме
+    ages = [int(p) for p in parts]  # ValueError on garbage — shown in the form
     if any(a < 0 or a > 120 for a in ages):
         raise ValueError("возраст вне диапазона")
     return ages
@@ -306,6 +306,6 @@ def page() -> None:
     with results_col:
         results()
 
-    # Любое изменение формы пересчитывает результат (расчёт занимает миллисекунды).
+    # Any form change recomputes the result (it takes milliseconds).
     for el in inputs:
         el.on_value_change(results.refresh)

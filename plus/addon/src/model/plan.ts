@@ -1,7 +1,7 @@
-// Модель плана: домохозяйство, доход autónomo, расходы; с фазы 2 — доходности счетов, flows
-// профицита и порядок изъятий. Схема Zod проверяет план, прочитанный из storage: старый или
-// испорченный JSON не должен молча давать нули. Поля фазы 2 — с default, поэтому план фазы 1
-// читается без миграции.
+// Plan model: household, autónomo income, expenses; since phase 2 — account returns, surplus
+// flows and withdrawal order. The Zod schema validates the plan read from storage: old or
+// broken JSON must not silently turn into zeros. Phase 2 fields have defaults, so a phase 1
+// plan loads without migration.
 import { z } from 'zod';
 
 const money = z.number().finite().min(0);
@@ -9,13 +9,13 @@ const rate = z.number().finite().min(-0.5).max(0.5);
 const year = z.number().int().min(1900).max(2200);
 
 export const AutonomoIncomeSchema = z.object({
-  /** Facturación за первый год плана, € в год */
+  /** Facturación in the plan's first year, € per year */
   revenue: money,
-  /** Вычитаемые расходы деятельности без cuota RETA, € в год */
+  /** Deductible business expenses excluding the RETA cuota, € per year */
   expenses: money,
-  /** Номинальный рост выручки и расходов в год */
+  /** Nominal growth of revenue and expenses per year */
   growth: rate,
-  /** Возраст, с которого дохода нет (год, когда исполнилось, — уже без дохода) */
+  /** Age from which there is no income (the year it is reached already has none) */
   untilAge: z.number().int().min(0).max(120),
 });
 
@@ -32,32 +32,32 @@ export const ChildSchema = z.object({
 
 export const ExpenseSchema = z.object({
   name: z.string().min(1).max(60),
-  /** € в год в ценах первого года плана; растёт с инфляцией */
+  /** € per year in first-year prices; grows with inflation */
   amount: money,
   kind: z.enum(['essential', 'discretionary']),
   startYear: year.nullable(),
   endYear: year.nullable(),
 });
 
-/** Номинальные ожидаемые доходности по испанским типам счетов, доля в год. */
+/** Nominal expected returns by Spanish account type, fraction per year. */
 export const ReturnsSchema = z.object({
-  /** Проценты по CASH-счетам — rendimientos del capital mobiliario */
+  /** Interest on CASH accounts — rendimientos del capital mobiliario */
   cashInterest: rate,
-  /** Рост fondos de inversión (накопительные: выплат нет) */
+  /** Growth of fondos de inversión (accumulating: no payouts) */
   fundGrowth: rate,
-  /** Рост цены ETF и акций */
+  /** Price growth of ETFs and stocks */
   brokerageGrowth: rate,
-  /** Дивиденды брокерского счёта от стоимости на начало года */
+  /** Brokerage dividends on start-of-year value */
   brokerageYield: rate,
-  /** Рост planes de pensiones */
+  /** Growth of planes de pensiones */
   pensionGrowth: rate,
 });
 
 /**
- * Куда идёт профицит года, по порядку. max — до вычитаемого лимита для плана пенсий, иначе весь
- * остаток; fixed — сумма в год; percent — доля остатка (amount 0…1); untilBalance — пополнить до
- * баланса. Суммы fixed и untilBalance — в ценах первого года плана. Остаток после flows — на
- * первый CASH-счёт.
+ * Where the year's surplus goes, in order. max — up to the deductible limit for a pension plan,
+ * otherwise the whole rest; fixed — amount per year; percent — share of the rest (amount 0…1);
+ * untilBalance — top up to a balance. fixed and untilBalance amounts are in first-year prices.
+ * What is left after the flows goes to the first CASH account.
  */
 export const FlowSchema = z.object({
   accountId: z.string().min(1),
@@ -78,19 +78,19 @@ export const PlanSchema = z
     version: z.literal(1),
     name: z.string().min(1).max(80),
     startYear: year,
-    /** План идёт, пока старшему не исполнится endAge */
+    /** The plan runs until the oldest person reaches endAge */
     endAge: z.number().int().min(1).max(120),
     inflation: rate,
-    /** Tributación individual или conjunta; conjunta — только для пары */
+    /** Tributación individual or conjunta; conjunta only for a couple */
     filing: z.enum(['individual', 'joint']),
     people: z.array(PersonSchema).min(1).max(2),
     children: z.array(ChildSchema).max(10),
     expenses: z.array(ExpenseSchema).max(50),
     returns: ReturnsSchema.default(DEFAULT_RETURNS),
     flows: z.array(FlowSchema).max(30).default([]),
-    /** id счетов Wealthfolio; пусто — cash → fondos → брокерский → планы пенсий */
+    /** Wealthfolio account ids; empty — cash → fondos → brokerage → pension plans */
     withdrawalOrder: z.array(z.string().min(1)).max(50).default([]),
-    /** С этого возраста владельца план пенсий доступен для изъятий */
+    /** From this owner age the pension plan is available for withdrawals */
     pensionAccessAge: z.number().int().min(50).max(80).default(65),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
@@ -107,7 +107,7 @@ export type Flow = z.infer<typeof FlowSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 export type Filing = Plan['filing'];
 
-/** Шаблон нового плана: суммы — заглушки, пользователь вводит свои. */
+/** Template for a new plan: amounts are placeholders, the user enters their own. */
 export function defaultPlan(startYear: number): Plan {
   return {
     version: 1,

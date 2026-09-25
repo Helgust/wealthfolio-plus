@@ -1,4 +1,4 @@
-"""Прогрессивные шкалы и загрузка налоговых правил из rules/."""
+"""Progressive scales and loading tax rules from rules/."""
 
 from __future__ import annotations
 
@@ -11,20 +11,20 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
-# src/planner/tax/scale.py -> корень проекта
+# src/planner/tax/scale.py -> project root
 RULES_DIR = Path(__file__).resolve().parents[3] / "rules"
 
 
 class Bracket(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    upto: float | None  # верхняя граница ступени, None = без ограничения
+    upto: float | None  # upper bound of the bracket, None = unbounded
     rate: float
 
 
 class Scale(BaseModel):
-    """Прогрессивная шкала. Работает и с числом, и с numpy-массивом баз
-    (массив нужен для Monte Carlo: одна база на траекторию)."""
+    """Progressive scale. Works with a number and with a numpy array of bases
+    (the array is for Monte Carlo: one base per trajectory)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -34,9 +34,9 @@ class Scale(BaseModel):
     def _check_order(self) -> Scale:
         bounds = [b.upto for b in self.brackets]
         if bounds[-1] is not None or None in bounds[:-1]:
-            raise ValueError("только последняя ступень может быть без верхней границы")
+            raise ValueError("only the last bracket may have no upper bound")
         if any(a >= b for a, b in pairwise(bounds[:-1])):
-            raise ValueError("границы ступеней должны строго возрастать")
+            raise ValueError("bracket bounds must be strictly increasing")
         return self
 
     @cached_property
@@ -52,21 +52,21 @@ class Scale(BaseModel):
     def apply(self, base: np.ndarray) -> np.ndarray: ...
 
     def apply(self, base):
-        """Налог по прогрессивной шкале на сумму base (евро). Отрицательная база = 0."""
+        """Tax on base (euros) under a progressive scale. A negative base gives 0."""
         lowers, uppers, rates = self._arrays
         b = np.asarray(base, dtype=float)[..., None]
         tax = (np.clip(b, lowers, uppers) - lowers) @ rates
         return float(tax) if np.ndim(base) == 0 else tax
 
     def marginal_rate(self, base: float) -> float:
-        """Ставка ступени, в которую попадает следующий евро сверх base."""
+        """Rate of the bracket the next euro above base falls into."""
         for b in self.brackets:
             if b.upto is None or base < b.upto:
                 return b.rate
         raise AssertionError("unreachable")
 
     def scaled(self, factor: float) -> Scale:
-        """Шкала с границами, умноженными на factor (индексация на инфляцию)."""
+        """Scale with bounds multiplied by factor (inflation indexing)."""
         return Scale(
             brackets=[
                 Bracket(upto=None if b.upto is None else b.upto * factor, rate=b.rate)
@@ -84,5 +84,5 @@ def load_rules(year: int, name: str) -> dict:
 
 
 def load_scale(year: int, name: str, key: str = "scale") -> Scale:
-    """Загружает шкалу из rules/<year>/<name>.yaml по ключу key."""
+    """Loads a scale from rules/<year>/<name>.yaml under key."""
     return Scale(brackets=load_rules(year, name)[key])

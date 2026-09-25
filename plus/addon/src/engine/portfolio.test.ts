@@ -15,7 +15,7 @@ function brokerage(positions: Position[], cash = 0): Account {
   return { id: 'b', name: 'Broker', kind: 'brokerage', owner: 0, cash, positions };
 }
 
-// Три лота по 10 паёв: 100, 150, 200 €/пай; цена сейчас 300.
+// Three lots of 10 units: 100, 150, 200 €/unit; price now 300.
 const etf = (): Position => ({
   name: 'ETF',
   price: 300,
@@ -29,7 +29,7 @@ const etf = (): Position => ({
 describe('withdraw (FIFO)', () => {
   it('sells the oldest lot first and splits a lot on a partial sale', () => {
     const a = brokerage([etf()]);
-    // 15 паёв × 300: первый лот целиком и половина второго.
+    // 15 units × 300: the whole first lot and half of the second.
     const sale = withdraw(a, 4_500);
     expect(sale.proceeds).toBeCloseTo(4_500, 9);
     expect(sale.cost).toBeCloseTo(1_000 + 750, 9);
@@ -44,14 +44,14 @@ describe('withdraw (FIFO)', () => {
     const sale = withdraw(a, 1_600);
     expect(a.cash).toBe(0);
     expect(sale.proceeds).toBeCloseTo(1_600, 9);
-    // 600 € = 2 пая первого лота по 100 €.
+    // 600 € = 2 units of the first lot at 100 €.
     expect(sale.cost).toBeCloseTo(1_000 + 200, 9);
   });
 
   it('sells positions pro rata by value, FIFO inside each', () => {
     const bond: Position = { name: 'Bond', price: 100, lots: [{ date: '2023-01-01', units: 90, cost: 9_000 }] };
     const a = brokerage([etf(), bond]);
-    withdraw(a, 1_800); // 10 % счёта 18 000
+    withdraw(a, 1_800); // 10 % of an 18,000 account
     expect(positionUnits(a.positions[0])).toBeCloseTo(27, 9);
     expect(positionUnits(a.positions[1])).toBeCloseTo(81, 9);
   });
@@ -91,14 +91,14 @@ describe('traspaso', () => {
     const from = etf();
     const to: Position = { name: 'Fund B', price: 50, lots: [{ date: '2021-06-01', units: 10, cost: 400 }] };
     const before = from.lots.reduce((s, l) => s + l.cost, 0) + to.lots[0].cost;
-    traspaso(from, to, 4_500); // 15 паёв по 300 → 90 паёв по 50
+    traspaso(from, to, 4_500); // 15 units at 300 → 90 units at 50
     expect(positionUnits(from)).toBeCloseTo(15, 9);
     expect(to.lots).toEqual([
       { date: '2020-01-01', units: 60, cost: 1_000 },
       { date: '2021-01-01', units: 30, cost: 750 },
       { date: '2021-06-01', units: 10, cost: 400 },
     ]);
-    // Без налогового события: стоимость приобретения не изменилась, стоимость — тоже.
+    // No taxable event: cost basis unchanged, value unchanged too.
     const after = from.lots.reduce((s, l) => s + l.cost, 0) + to.lots.reduce((s, l) => s + l.cost, 0);
     expect(after).toBeCloseTo(before, 9);
     expect(positionUnits(to) * to.price + positionUnits(from) * from.price).toBeCloseTo(9_000 + 500, 9);

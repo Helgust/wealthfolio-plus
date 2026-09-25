@@ -1,5 +1,5 @@
-// График net worth по годам: площади по испанским типам счетов стопкой, net worth — линией
-// (включает то, что вне модели). Старт — значения из Wealthfolio.
+// Net worth by year: areas stacked by Spanish account type, net worth as a line (it includes
+// what is outside the model). The start is the Wealthfolio values.
 import {
   Area,
   CartesianGrid,
@@ -17,10 +17,10 @@ import {
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 
-// Своя палитра в тонах Wealthfolio (хвоя, охра, терракота, лиловый), но насыщеннее: цвета хоста
-// --chart-1…4 не различаются в стопке. Порядок — снизу вверх; обе темы проверены валидатором
-// dataviz на фонах хоста (#fffcf0 и #100f0f): полоса светлоты, насыщенность, соседние пары при
-// дальтонизме (ΔE ≥ 8) и обычном зрении (ΔE ≥ 15), контраст ≥ 3:1.
+// Own palette in Wealthfolio tones (forest, ochre, terracotta, purple), but more saturated: the
+// host colors --chart-1…4 are not distinguishable in a stack. Order is bottom to top; both themes
+// checked with the dataviz validator on the host backgrounds (#fffcf0 and #100f0f): lightness band,
+// chroma, adjacent pairs under color blindness (ΔE ≥ 8) and normal vision (ΔE ≥ 15), contrast ≥ 3:1.
 const config = {
   cash: { label: 'Cash', theme: { light: '#1d7a58', dark: '#2a9168' } },
   fund: { label: 'Fondos', theme: { light: '#b08a14', dark: '#b78f1b' } },
@@ -42,7 +42,7 @@ export function NetWorthChart({ rows, currency, mode }: Props) {
     age: r.people.map((p) => p.age).join(' / '),
     netWorth: inMode(r.netWorth, r.deflator, mode),
     other: inMode(r.otherAssets, r.deflator, mode),
-    // Отрицательный cash (деньги кончились) в стопку не кладём: он виден по линии net worth.
+    // Negative cash (money ran out) is not stacked: it shows in the net worth line.
     cash: inMode(Math.max(r.balances.cash, 0), r.deflator, mode),
     debt: inMode(Math.min(r.balances.cash, 0), r.deflator, mode),
     fund: inMode(r.balances.fund, r.deflator, mode),

@@ -1,11 +1,11 @@
-"""Выгрузка для аддона на TypeScript: правила по годам в JSON и golden-фикстуры.
+"""Export for the TypeScript addon: rules by year as JSON and golden fixtures.
 
-Правила остаются в rules/<год>/*.yaml; JSON — их проверенная pydantic копия для аддона.
-Фикстуры — входы и результаты `actividad`, `minimo_*`, `irpf_anual`, `irpf_conjunta` по сетке:
-TS-порт должен совпасть с ними до 0,01 €.
+Rules stay in rules/<year>/*.yaml; the JSON is their pydantic-validated copy for the addon.
+Fixtures are inputs and results of `actividad`, `minimo_*`, `irpf_anual`, `irpf_conjunta` on a
+grid: the TS port must match them to 0.01 €.
 
-Запуск из plus/python: .venv\\Scripts\\python -m planner.export_ts
-Тест tests/test_export_ts.py падает, если выгрузка устарела.
+Run from plus/python: .venv\\Scripts\\python -m planner.export_ts
+tests/test_export_ts.py fails if the export is stale.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def _irpf_out(res) -> dict:
 
 
 INGRESOS = [0, 6_000, 14_000, 22_000, 35_000, 50_000, 75_000, 120_000, 250_000]
-GASTOS_RATIO = [0.0, 0.3, 1.2]  # 1.2 — убыток
+GASTOS_RATIO = [0.0, 0.3, 1.2]  # 1.2 — a loss
 
 HOGARES = {
     "solo_40": ([Persona(edad=40)], [], []),
@@ -110,7 +110,7 @@ def _actividad_cases(year: int, rules) -> list[dict]:
                 "expected": asdict(a),
             }
         )
-    for base in (1_000.0, 3_000.0):  # base elegida — прижимается к tramo
+    for base in (1_000.0, 3_000.0):  # base elegida — clamped to the tramo
         a = actividad(60_000, 10_000, rules, base_elegida=base)
         cases.append(
             {
@@ -154,7 +154,7 @@ def _individual_cases(year: int, rules) -> list[dict]:
                 "expected": _irpf_out(res),
             }
         )
-    # Выплаты планов пенсий и пенсии: otros gastos 19.2.f и reducción art. 20 по ступеням.
+    # Pension plan payouts and pensions: otros gastos 19.2.f and reducción art. 20 by segment.
     conts = [Persona(edad=70, discapacidad=Discapacidad.GRADO_33)]
     minimo = minimo_personal_familiar(conts[0], rules)
     for integro, rn, (rcm, gan) in product(
@@ -176,7 +176,7 @@ def _individual_cases(year: int, rules) -> list[dict]:
                 "expected": _irpf_out(res),
             }
         )
-    # Особые режимы: dependiente, inicio_actividad, deducciones.
+    # Special modes: dependiente, inicio_actividad, deducciones.
     minimo = minimo_personal_familiar(Persona(edad=40), rules)
     for rn, flags in product(
         (9_000.0, 16_000.0, 40_000.0),
@@ -206,7 +206,7 @@ def _individual_cases(year: int, rules) -> list[dict]:
 
 
 def _cadena_cases(year: int, rules) -> list[dict]:
-    """Несколько лет подряд с переносом убытков: pendientes из года в год."""
+    """Several years in a row with loss carry-forward: pendientes from year to year."""
     minimo = minimo_personal_familiar(Persona(edad=40), rules)
     anos = [
         {"rendimiento_actividad": -6_000.0, "rcm": -800.0, "ganancias": -2_000.0},

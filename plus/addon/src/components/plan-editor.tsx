@@ -1,5 +1,5 @@
-// Выезжающая панель редактирования плана. Черновик живёт в локальном состоянии и проверяется
-// схемой Zod при сохранении.
+// Slide-out plan editing panel. The draft lives in local state and is validated by the Zod
+// schema on save.
 import {
   Button,
   Input,
@@ -30,7 +30,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (plan: Plan) => Promise<void>;
-  /** Счета в модели — для flows и порядка изъятий */
+  /** Modelled accounts — for flows and the withdrawal order */
   accounts: Account[];
 }
 
@@ -44,7 +44,7 @@ export function PlanEditor({ plan, open, onOpenChange, onSave, accounts }: Props
             Amounts are per year, in euros of the plan's first year.
           </SheetDescription>
         </SheetHeader>
-        {/* Форма монтируется при открытии, поэтому черновик всегда начинается с плана. */}
+        {/* The form mounts on open, so the draft always starts from the plan. */}
         {open && (
           <PlanForm
             plan={plan}

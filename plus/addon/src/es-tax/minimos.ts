@@ -1,22 +1,22 @@
-// Порт planner.tax.minimos: mínimo personal y familiar (arts. 56–61, 84.2.2º LIRPF).
+// Port of planner.tax.minimos: mínimo personal y familiar (arts. 56–61, 84.2.2º LIRPF).
 import type { DiscapacidadAmounts, IrpfRules, MinimoAmounts, MinimoConditions } from './rules';
 
 export type Discapacidad = 'ninguna' | 'grado_33' | 'grado_65';
 
-/** Возраст — на 31 декабря года расчёта (art. 61 LIRPF). */
+/** Age on 31 December of the tax year (art. 61 LIRPF). */
 export interface Persona {
   edad: number;
   discapacidad: Discapacidad;
-  asistencia: boolean; // помощь третьих лиц / ограниченная мобильность
+  asistencia: boolean; // needs third-party assistance / reduced mobility
 }
 
-/** Descendiente или ascendiente, живущий с налогоплательщиком. */
+/** Descendiente or ascendiente living with the taxpayer. */
 export interface Familiar extends Persona {
-  renta_anual: number; // выше лимита — права на mínimo нет
-  share: number; // доля этого налогоплательщика, 0.5 — если детей декларируют оба родителя
+  renta_anual: number; // above the limit there is no right to the mínimo
+  share: number; // this taxpayer's share, 0.5 if both parents declare the children
 }
 
-/** Величина, считаемая отдельно для государственной и автономной половины IRPF. */
+/** An amount computed separately for the state and regional halves of IRPF. */
 export interface Mitades {
   estatal: number;
   autonomica: number;
@@ -44,11 +44,11 @@ function minimoMitad(
   a: MinimoAmounts,
   c: MinimoConditions,
 ): number {
-  // Общая сумма — одна на декларацию и в conjunta; прибавки — по каждому супругу (84.2.2º).
+  // The general amount is one per return, in conjunta too; increments per spouse (84.2.2º).
   let t = a.contribuyente.general;
   for (const p of contribuyentes) t += incrementosContribuyente(p, a, c);
 
-  // Descendientes: младше 25 или с discapacidad, доходы не выше лимита; старший — «первый».
+  // Descendientes: under 25 or with discapacidad, income within the limit; the oldest is the "first".
   const eligible = descendientes
     .filter(
       (d) =>
@@ -63,7 +63,7 @@ function minimoMitad(
     t += (amount + discapacidad(d, a.discapacidad)) * d.share;
   });
 
-  // Ascendientes: старше 65 или с discapacidad, доходы не выше лимита (art. 59).
+  // Ascendientes: over 65 or with discapacidad, income within the limit (art. 59).
   for (const p of ascendientes) {
     if (p.renta_anual > c.renta_max_familiar) continue;
     if (p.edad < c.edad_mayor_65 && p.discapacidad === 'ninguna') continue;
@@ -93,7 +93,7 @@ function minimo(
   };
 }
 
-/** Mínimo одного налогоплательщика (tributación individual). */
+/** Mínimo of one taxpayer (tributación individual). */
 export function minimoPersonalFamiliar(
   contribuyente: Persona,
   rules: IrpfRules,
@@ -104,8 +104,8 @@ export function minimoPersonalFamiliar(
 }
 
 /**
- * Mínimo в tributación conjunta (art. 84.2.2º): mínimo del contribuyente — один на unidad
- * familiar, прибавки за возраст и discapacidad — по каждому супругу; дети с share=1.
+ * Mínimo in tributación conjunta (art. 84.2.2º): the mínimo del contribuyente is one per unidad
+ * familiar, age and discapacidad increments per spouse; children with share=1.
  */
 export function minimoConjunta(
   conyuges: Persona[],

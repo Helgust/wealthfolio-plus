@@ -1,6 +1,6 @@
-"""Эталонный тест: модель против реальной декларации пользователя (tests/data/declaracion_*.yaml).
+"""Reference test: the model against the user's real tax return (tests/data/declaracion_*.yaml).
 
-Файлы с личными данными в .gitignore; без них тест пропускается. Шаблон и описание полей —
+Files with personal data are in .gitignore; without them the test is skipped. Template and fields:
 tests/data/declaracion.example.yaml.
 """
 
@@ -67,7 +67,7 @@ class Declaracion(_Strict):
 
 
 def calcular(d: Declaracion) -> tuple[float, IrpfAnual]:
-    """rendimiento neto по фактической cuota RETA из декларации, затем IRPF за год."""
+    """rendimiento neto from the actual RETA cuota in the return, then IRPF for the year."""
     rules = load_irpf_rules(d.year)
     a = d.actividad
     rn = rendimiento_neto(
@@ -105,7 +105,7 @@ def test_example_template_is_valid():
 DECLARACIONES = sorted(DATA.glob("declaracion_*.yaml"))
 
 
-@pytest.mark.skipif(not DECLARACIONES, reason="нет tests/data/declaracion_<год>.yaml")
+@pytest.mark.skipif(not DECLARACIONES, reason="no tests/data/declaracion_<year>.yaml")
 @pytest.mark.parametrize("path", DECLARACIONES, ids=lambda p: p.stem)
 def test_model_matches_declaracion(path):
     d = _load(path)
@@ -119,10 +119,10 @@ def test_model_matches_declaracion(path):
         "cuota_liquida_estatal": res.cuota_liquida.estatal,
         "cuota_liquida_autonomica": res.cuota_liquida.autonomica,
     }
-    # Декларация округляет до цента на каждом шаге — допуск 1 €.
+    # The return rounds to the cent at every step — tolerance 1 €.
     mismatches = {
         k: (got[k], v)
         for k, v in d.esperado.model_dump().items()
         if v is not None and abs(got[k] - v) > 1.0
     }
-    assert not mismatches, f"модель ≠ декларация (модель, декларация): {mismatches}"
+    assert not mismatches, f"model ≠ tax return (model, return): {mismatches}"

@@ -1,4 +1,4 @@
-// Фаза 0: learning tests песочницы аддона (см. plus/docs/wealthfolio-plan.md, «Фаза 0»).
+// Phase 0: learning tests of the addon sandbox (see plus/docs/wealthfolio-plan.md, phase 0 section).
 import { useQuery } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { useAddonTranslation } from '@wealthfolio/addon-sdk';
@@ -46,34 +46,34 @@ function DataSection({ ctx }: { ctx: AddonContext }) {
     queryKey: ['phase0', 'portfolio'],
     queryFn: () => loadPortfolio(ctx),
   });
-  if (isLoading) return <Section title="1. Данные Wealthfolio">Загрузка…</Section>;
-  if (error) return <Section title="1. Данные Wealthfolio">Ошибка: {String(error)}</Section>;
+  if (isLoading) return <Section title="1. Wealthfolio data">Loading…</Section>;
+  if (error) return <Section title="1. Wealthfolio data">Error: {String(error)}</Section>;
   if (!data) return null;
   return (
-    <Section title="1. Данные Wealthfolio">
+    <Section title="1. Wealthfolio data">
       <p>
-        Счетов: {data.perAccount.length}; дней истории стоимости: {data.valuations}; периодов
-        доходов: {data.income.length}
+        Accounts: {data.perAccount.length}; days of valuation history: {data.valuations}; income
+        periods: {data.income.length}
       </p>
       <ul className="list-disc pl-5">
         {data.perAccount.map(({ account, holdings, lots }) => (
           <li key={account.id}>
-            {account.name} ({account.accountType}, {account.trackingMode}): позиций {holdings},
-            лотов {lots}
+            {account.name} ({account.accountType}, {account.trackingMode}): holdings {holdings},
+            lots {lots}
           </li>
         ))}
       </ul>
       {data.alternatives === null ? (
         <p className="text-muted-foreground">
-          Альтернативные активы и долги: метод недоступен — официальная сборка без правки форка.
+          Alternative assets and debts: method unavailable — official build without the fork change.
         </p>
       ) : (
         <>
-          <p>Альтернативных активов и долгов: {data.alternatives.length}</p>
+          <p>Alternative assets and debts: {data.alternatives.length}</p>
           <ul className="list-disc pl-5">
             {data.alternatives.map((a) => (
               <li key={a.id}>
-                {a.name} ({a.kind}): {a.marketValue} {a.currency} на {a.valuationDate}
+                {a.name} ({a.kind}): {a.marketValue} {a.currency} as of {a.valuationDate}
               </li>
             ))}
           </ul>
@@ -90,7 +90,7 @@ interface StorageCheck {
   ms: number;
 }
 
-// Похоже на будущий план: массив строк с числами. ~40 байт на строку.
+// Resembles a future plan: an array of rows with numbers. ~40 bytes per row.
 function makeBlob(): string {
   const rows = Array.from({ length: BLOB_BYTES / 40 }, (_, i) => ({
     year: 2026 + i,
@@ -123,27 +123,27 @@ function StorageSection({ ctx }: { ctx: AddonContext }) {
     checkStorage(ctx).then(setResult, (e) => setError(String(e)));
   };
   return (
-    <Section title={`2. storage: JSON на ${BLOB_BYTES / 1000} КБ`}>
-      <Button onClick={run}>Записать и прочитать</Button>
-      {error && <p className="text-destructive">Ошибка: {error}</p>}
+    <Section title={`2. storage: ${BLOB_BYTES / 1000} KB of JSON`}>
+      <Button onClick={run}>Write and read</Button>
+      {error && <p className="text-destructive">Error: {error}</p>}
       {result && (
         <>
           <p>
-            Запись и чтение: <Verdict ok={result.roundTripOk} /> за {result.ms.toFixed(0)} мс
+            Write and read: <Verdict ok={result.roundTripOk} /> in {result.ms.toFixed(0)} ms
           </p>
           <p>
-            Прошлый запуск: {result.previousRun ?? 'нет (первый запуск)'}
+            Previous run: {result.previousRun ?? 'none (first run)'}
             {result.previousRun && (
               <>
                 {' '}
-                — данные с прошлого запуска целы: <Verdict ok={result.previousBlobOk} />
+                — data from the previous run is intact: <Verdict ok={result.previousBlobOk} />
               </>
             )}
           </p>
         </>
       )}
       <p className="text-muted-foreground">
-        Переживание перезапуска: нажать, перезапустить Wealthfolio, нажать снова.
+        Survives a restart: click, restart Wealthfolio, click again.
       </p>
     </Section>
   );
@@ -153,17 +153,17 @@ function BenchSection() {
   const [runs, setRuns] = useState<BenchResult[]>([]);
   const last = runs[runs.length - 1];
   return (
-    <Section title="3. Черновой движок: 1 000 траекторий × 40 лет">
-      <Button onClick={() => setRuns([...runs, runBench()])}>Запустить</Button>
+    <Section title="3. Draft engine: 1,000 trajectories × 40 years">
+      <Button onClick={() => setRuns([...runs, runBench()])}>Run</Button>
       {last && (
         <p>
-          Запуск №{runs.length}: {last.ms.toFixed(0)} мс (бюджет 2 000):{' '}
+          Run #{runs.length}: {last.ms.toFixed(0)} ms (budget 2,000):{' '}
           <Verdict ok={last.ms < 2_000} />
-          {runs.length > 1 && <> · все запуски, мс: {runs.map((r) => r.ms.toFixed(0)).join(', ')}</>}
+          {runs.length > 1 && <> · all runs, ms: {runs.map((r) => r.ms.toFixed(0)).join(', ')}</>}
         </p>
       )}
       <p className="text-muted-foreground">
-        Нагрузка условная (seed фиксирован), важно только время. Главный поток занят ровно это время.
+        Synthetic load (fixed seed); only the time matters. The main thread is busy for exactly that time.
       </p>
     </Section>
   );
@@ -172,13 +172,13 @@ function BenchSection() {
 function LanguageSection() {
   const { t, language } = useAddonTranslation();
   return (
-    <Section title="4. Локализация">
+    <Section title="4. Localization">
       <p>
-        Язык хоста: <code>{language}</code>; строка: «{t('phase0.greeting')}»
+        Host language: <code>{language}</code>; string: "{t('phase0.greeting')}"
       </p>
       <p className="text-muted-foreground">
-        Хост знает только en, fr, de, es, pt, zh, zh-Hant, ja, ko, it: пакет <code>ru</code>{' '}
-        зарегистрирован, но не выбирается.
+        The host knows only en, fr, de, es, pt, zh, zh-Hant, ja, ko, it: the <code>ru</code>{' '}
+        bundle is registered but never selected.
       </p>
     </Section>
   );
@@ -187,7 +187,7 @@ function LanguageSection() {
 export function Phase0Page({ ctx }: { ctx: AddonContext }) {
   return (
     <div className="space-y-4 p-6">
-      <h1 className="text-2xl font-semibold">Planificador ES — проверки фазы 0</h1>
+      <h1 className="text-2xl font-semibold">Planificador ES — phase 0 checks</h1>
       <DataSection ctx={ctx} />
       <StorageSection ctx={ctx} />
       <BenchSection />

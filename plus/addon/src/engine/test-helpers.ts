@@ -1,4 +1,4 @@
-// Общие заготовки тестов движка.
+// Shared fixtures for engine tests.
 import type { Plan } from '../model/plan';
 import type { Account, Position } from './portfolio';
 
@@ -19,7 +19,7 @@ export const cashAccount = (cash: number, id = 'cash'): Account => ({
   positions: [],
 });
 
-/** Счёт с одной позицией: один лот units паёв по цене price, стоимость приобретения cost. */
+/** Account with one position: one lot of units at price, cost basis cost. */
 export function investAccount(
   id: string,
   kind: Account['kind'],

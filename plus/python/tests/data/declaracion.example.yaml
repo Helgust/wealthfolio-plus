@@ -1,29 +1,29 @@
-# Эталон: ваша декларация IRPF из Renta Web. Скопируйте в tests/data/declaracion_<год>.yaml
-# (файл в .gitignore) и заполните. Тест tests/test_declaracion.py сверит модель с декларацией;
-# без файла он пропускается. Суммы — в евро за год, как в декларации.
+# Reference: your IRPF tax return from Renta Web. Copy to tests/data/declaracion_<year>.yaml
+# (the file is in .gitignore) and fill it in. tests/test_declaracion.py checks the model against
+# the return; without the file it is skipped. Amounts in euros per year, as in the return.
 year: 2025
 
-# --- Входы ------------------------------------------------------------------
-contribuyente: {edad: 35, discapacidad: ninguna}   # ninguna | grado_33 | grado_65; возраст на 31.12
-descendientes: []            # например: [{edad: 5, share: 0.5}] — share 0.5, если mínimo делится
-ascendientes: []             # например: [{edad: 72}]
+# --- Inputs -----------------------------------------------------------------
+contribuyente: {edad: 35, discapacidad: ninguna}   # ninguna | grado_33 | grado_65; age on 31.12
+descendientes: []            # e.g.: [{edad: 5, share: 0.5}] — share 0.5 if the mínimo is split
+ascendientes: []             # e.g.: [{edad: 72}]
 
 actividad:
-  ingresos: 0                # ingresos de explotación (без IVA)
-  gastos: 0                  # gastos deducibles БЕЗ cuota RETA
-  cuota_reta: 0              # фактически уплаченная cuota RETA за год
-  dependiente: false         # применялась reducción art. 32.2.1º
-  inicio_actividad: false    # применялась reducción 20 % art. 32.3
+  ingresos: 0                # ingresos de explotación (excluding IVA)
+  gastos: 0                  # gastos deducibles WITHOUT the RETA cuota
+  cuota_reta: 0              # RETA cuota actually paid for the year
+  dependiente: false         # reducción art. 32.2.1º was applied
+  inicio_actividad: false    # the 20 % reducción art. 32.3 was applied
 
 rendimientos_trabajo: 0      # rendimiento neto del trabajo
-rcm: 0                       # saldo rendimientos del capital mobiliario (база сбережений)
-ganancias: 0                 # saldo ganancias y pérdidas patrimoniales (база сбережений)
-aportacion_pensiones: 0      # взносы в обычные планы пенсий
-aportacion_pensiones_autonomo: 0  # в planes de empleo simplificados для autónomos
-deducciones: {estatal: 0, autonomica: 0}  # суммы deducciones по половинам
+rcm: 0                       # saldo rendimientos del capital mobiliario (savings base)
+ganancias: 0                 # saldo ganancias y pérdidas patrimoniales (savings base)
+aportacion_pensiones: 0      # contributions to regular pension plans
+aportacion_pensiones_autonomo: 0  # to planes de empleo simplificados for autónomos
+deducciones: {estatal: 0, autonomica: 0}  # deducciones summed by half
 
-# --- Эталон из декларации -----------------------------------------------------
-# Заполните, что есть; пустые (null) поля не проверяются.
+# --- Reference values from the return ---------------------------------------
+# Fill in what you have; empty (null) fields are not checked.
 esperado:
   rendimiento_neto_actividad: null
   base_liquidable_general: null

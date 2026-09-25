@@ -1,6 +1,6 @@
-// Стартовая точка плана из Wealthfolio: net worth как на странице Net Worth и счета с позициями
-// и лотами. Испанский тип счёта накладывается отдельно (buildStart), чтобы смена типа не
-// перечитывала портфель.
+// Plan starting point from Wealthfolio: net worth as on the Net Worth page, and accounts with
+// positions and lots. The Spanish account type is applied separately (buildStart) so changing
+// a type does not reload the portfolio.
 import type { AddonContext, Holding } from '@wealthfolio/addon-sdk';
 import { positionValue, type Account, type Position } from '../engine/portfolio';
 import type { StartingPoint } from '../engine/run-plan';
@@ -10,11 +10,11 @@ import { getNetWorth } from './fork-api';
 export interface WfAccount {
   id: string;
   name: string;
-  /** Тип счёта Wealthfolio: CASH, SECURITIES, … */
+  /** Wealthfolio account type: CASH, SECURITIES, … */
   accountType: string;
-  /** Оценка Wealthfolio на последнюю дату */
+  /** Wealthfolio valuation at the latest date */
   wfValue: number;
-  /** Деньги без лотов */
+  /** Money without lots */
   cash: number;
   positions: Position[];
 }
@@ -22,7 +22,7 @@ export interface WfAccount {
 export interface LoadedPortfolio {
   netWorth: number;
   currency: string | null;
-  /** true — net worth из get_net_worth форка; false — сумма оценок счетов (официальная сборка) */
+  /** true — net worth from the fork's get_net_worth; false — sum of account valuations (official build) */
   exact: boolean;
   accounts: WfAccount[];
 }
@@ -31,8 +31,8 @@ export const settingFor = (settings: AccountSettings, a: WfAccount): AccountSett
   settings[a.id] ?? defaultSetting(a.accountType);
 
 /**
- * Позиция из holding Wealthfolio. Стоимость приобретения лотов — в валюте актива; масштабируем
- * их к исторической стоимости в базовой валюте (costBasis.base), чтобы прирост был в евро.
+ * Position from a Wealthfolio holding. Lot cost basis is in the asset currency; it is scaled to
+ * the historical cost in base currency (costBasis.base) so gains are in euros.
  */
 function toPosition(h: Holding, lots: Holding['lots']): Position {
   const units = h.quantity;
@@ -67,7 +67,7 @@ async function loadAccount(
       continue;
     }
     if (h.quantity <= 0) continue;
-    // getHoldings лоты не отдаёт: они есть только в getHolding по одному активу.
+    // getHoldings does not return lots: they come only from getHolding, one asset at a time.
     const full = h.instrument ? await ctx.api.portfolio.getHolding(id, h.instrument.id) : null;
     positions.push(toPosition(h, full?.lots));
   }
@@ -101,14 +101,14 @@ export async function loadPortfolio(ctx: AddonContext): Promise<LoadedPortfolio>
   };
 }
 
-/** Стартовая точка движка: счета с испанским типом; other остаётся в net worth как есть. */
+/** Engine starting point: accounts with a Spanish type; other stays in net worth as is. */
 export function buildStart(portfolio: LoadedPortfolio, settings: AccountSettings): StartingPoint {
   return {
     netWorth: portfolio.netWorth,
     accounts: portfolio.accounts.flatMap((a): Account[] => {
       const { kind, owner } = settingFor(settings, a);
       if (kind === 'other') return [];
-      // CASH-счёт в модели — только остаток; позиции на нём (если есть) считаем деньгами.
+      // A CASH account in the model is only a balance; positions on it (if any) count as money.
       if (kind === 'cash') {
         const value = a.cash + a.positions.reduce((s, p) => s + positionValue(p), 0);
         return [{ id: a.id, name: a.name, kind, owner, cash: value, positions: [] }];

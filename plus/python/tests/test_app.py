@@ -1,4 +1,4 @@
-"""UI-тесты приложения через симулированного пользователя NiceGUI (без браузера)."""
+"""UI tests of the app through the NiceGUI simulated user (no browser)."""
 
 import pytest
 from nicegui import ui
@@ -11,7 +11,7 @@ from planner.tax import Persona
 
 
 def _set_manual(user) -> None:
-    # Клик по опции ui.toggle симуляция не передаёт — ставим значение как это сделал бы клиент.
+    # The simulation does not pass clicks on ui.toggle options — set the value as the client would.
     user.find(kind=ui.toggle).elements.pop().value = "manual"
 
 

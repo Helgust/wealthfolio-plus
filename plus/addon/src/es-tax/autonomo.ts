@@ -1,5 +1,5 @@
-// Порт planner.tax.autonomo: rendimiento neto (estimación directa simplificada) и cuota RETA.
-// Полный год в alta; суммы годовые, кроме базы RETA (евро в месяц, как в таблицах).
+// Port of planner.tax.autonomo: rendimiento neto (estimación directa simplificada) and RETA cuota.
+// A full year in alta; amounts are yearly, except the RETA base (euros per month, as in the tables).
 import type { ActividadRules, IrpfRules, RetaRules } from './rules';
 
 /** Provisiones + gastos de difícil justificación (art. 30.2.2.ª RIRPF). */
@@ -9,8 +9,8 @@ export function gastosDificilJustificacion(rendimientoPrevio: number, rules: Act
 }
 
 /**
- * Rendimiento neto IRPF. gastos — все вычитаемые расходы года, включая cuota RETA.
- * gastosDificil=false — без gastos de difícil justificación (при reducción art. 32.2.1º).
+ * IRPF rendimiento neto. gastos — all deductible expenses of the year, including the RETA cuota.
+ * gastosDificil=false — without gastos de difícil justificación (under reducción art. 32.2.1º).
  */
 export function rendimientoNeto(
   ingresos: number,
@@ -22,7 +22,7 @@ export function rendimientoNeto(
   return gastosDificil ? previo - gastosDificilJustificacion(previo, rules) : previo;
 }
 
-/** Индекс tramo в rules.tramos для rendimiento computable в месяц. */
+/** Index of the tramo in rules.tramos for a monthly rendimiento computable. */
 export function retaTramo(rendimientoMensual: number, rules: RetaRules): number {
   let idx = 0;
   for (const t of rules.tramos.slice(0, -1)) {
@@ -42,26 +42,26 @@ export function retaTiposTotal(rules: RetaRules): number {
   );
 }
 
-/** Итог года по деятельности autónomo. */
+/** Year result of the autónomo activity. */
 export interface Actividad {
   ingresos: number;
-  gastos: number; // без RETA
-  cuota_reta: number; // в год
+  gastos: number; // excluding RETA
+  cuota_reta: number; // per year
   gastos_dificil_justificacion: number;
-  rendimiento_neto: number; // IRPF, идёт в общую базу
-  rendimiento_computable: number; // для RETA, в год (после gastos genéricos)
-  reta_tramo: number; // индекс в rules.reta.tramos
-  reta_base: number; // евро в месяц
+  rendimiento_neto: number; // IRPF, goes to the general base
+  rendimiento_computable: number; // for RETA, per year (after gastos genéricos)
+  reta_tramo: number; // index into rules.reta.tramos
+  reta_base: number; // euros per month
 }
 
 /**
- * Rendimiento neto и cuota RETA за год с учётом их взаимной зависимости: cuota — gasto
- * deducible, а tramo выбирается по rendimiento computable = (rendimiento neto + cuota) ×
- * (1 − gastos genéricos) / 12 (art. 308.1.c LGSS). Перебираем tramos и берём первый
- * согласованный (подробно — в docstring Python-эталона).
+ * Rendimiento neto and RETA cuota for the year, accounting for their mutual dependency: the cuota
+ * is a gasto deducible, while the tramo is chosen by rendimiento computable = (rendimiento neto +
+ * cuota) × (1 − gastos genéricos) / 12 (art. 308.1.c LGSS). Tries the tramos and takes the first
+ * consistent one (details in the Python reference docstring).
  *
- * baseElegida — база в месяц, выбранная autónomo (null — минимальная); прижимается к tramo.
- * gastos — расходы без cuota RETA.
+ * baseElegida — monthly base chosen by the autónomo (null — the minimum); clamped to the tramo.
+ * gastos — expenses excluding the RETA cuota.
  */
 export function actividad(
   ingresos: number,
@@ -82,7 +82,7 @@ export function actividad(
     const computable = (neto + cuota) * (1 - reta.gastos_genericos);
     return { base, cuota, neto, computable };
   });
-  // Как np.argmax: если согласованного tramo нет, берётся первый.
+  // Like np.argmax: if no tramo is consistent, the first one is taken.
   const k = Math.max(
     0,
     candidatos.findIndex((c, i) => retaTramo(c.computable / 12, reta) === i),

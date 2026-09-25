@@ -1,4 +1,4 @@
-"""Autónomo: rendimiento neto (estimación directa simplificada) и cuota RETA."""
+"""Autónomo: rendimiento neto (estimación directa simplificada) and RETA cuota."""
 
 import numpy as np
 import pytest
@@ -19,7 +19,7 @@ def r2026():
     return load_irpf_rules(2026)
 
 
-# --- Правила из BOE ------------------------------------------------------------
+# --- Rules from the BOE ---------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -38,11 +38,11 @@ def test_reta_total_rate_and_max_base(year, tipo, base_maxima):
 
 
 def test_reta_minimum_monthly_cuota_2026(r2026):
-    # Tabla reducida, tramo 1: 653,59 × 31,5 % = 205,88 €/мес.
+    # Tabla reducida, tramo 1: 653.59 × 31.5 % = 205.88 €/month.
     assert round(r2026.reta.tramos[0].base_min * r2026.reta.tipos.total, 2) == 205.88
 
 
-# --- Выбор tramo на границах ----------------------------------------------------
+# --- Tramo choice at the bounds --------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -76,7 +76,7 @@ def test_reta_rules_reject_decreasing_bases(r2026):
         RetaRules.model_validate(data)
 
 
-# --- Gastos de difícil justificación и rendimiento neto -------------------------
+# --- Gastos de difícil justificación and rendimiento neto ------------------------
 
 
 @pytest.mark.parametrize(
@@ -84,7 +84,7 @@ def test_reta_rules_reject_decreasing_bases(r2026):
     [(-1_000, 0), (0, 0), (20_000, 1_000), (40_000, 2_000), (100_000, 2_000)],
 )
 def test_gastos_dificil_justificacion_rate_and_cap(r2026, previo, gdj):
-    # 5 % от положительного rendimiento, не больше 2 000 € (art. 30.2.2.ª RIRPF).
+    # 5 % of the positive rendimiento, no more than 2,000 € (art. 30.2.2.ª RIRPF).
     assert gastos_dificil_justificacion(previo, r2026.actividad) == pytest.approx(gdj)
 
 
@@ -92,12 +92,12 @@ def test_rendimiento_neto_can_be_negative(r2026):
     assert rendimiento_neto(10_000, 12_000, r2026.actividad) == -2_000
 
 
-# --- Rendimiento neto + RETA вместе ------------------------------------------
+# --- Rendimiento neto + RETA together --------------------------------------------
 
 
 def test_actividad_hand_calculation(r2026):
     a = actividad(40_000, 5_000, r2026)
-    cuota = 1_356.21 * 12 * 0.315  # general 7: 2 330 < rend/мес ≤ 2 760
+    cuota = 1_356.21 * 12 * 0.315  # general 7: 2,330 < rend/month ≤ 2,760
     previo = 40_000 - 5_000 - cuota
     neto = previo * 0.95
     assert r2026.reta.tramos[a.reta_tramo].label == "general 7"
@@ -112,7 +112,7 @@ def test_actividad_tramo_is_consistent_with_its_own_cuota(r2026):
     ingresos = np.linspace(0, 150_000, 1_501)
     a = actividad(ingresos, np.full_like(ingresos, 3_000), r2026)
     assert (reta_tramo(a.rendimiento_computable / 12, r2026.reta) == a.reta_tramo).all()
-    assert np.all(np.diff(a.cuota_reta) >= 0)  # больше выручка — не меньше cuota
+    assert np.all(np.diff(a.cuota_reta) >= 0)  # more revenue — no lower cuota
 
 
 def test_actividad_vectorized_matches_scalar(r2026):
@@ -137,9 +137,9 @@ def test_actividad_loss_pays_minimum_cuota(r2026):
 @pytest.mark.parametrize(
     ("base_elegida", "expected"),
     [
-        (2_000, 2_000),  # внутри [base_min, base_max] tramo — остаётся
-        (500, None),  # ниже минимума — прижимается к base_min
-        (50_000, None),  # выше максимума — прижимается к base_max
+        (2_000, 2_000),  # inside the tramo's [base_min, base_max] — kept
+        (500, None),  # below the minimum — clamped to base_min
+        (50_000, None),  # above the maximum — clamped to base_max
     ],
 )
 def test_actividad_chosen_base_clipped_to_tramo(r2026, base_elegida, expected):

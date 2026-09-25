@@ -1,10 +1,10 @@
-"""Compensación de rentas negativas с переносом на следующие годы (arts. 49 и 50.3 LIRPF).
+"""Compensación de rentas negativas with carry-forward to later years (arts. 49 and 50.3 LIRPF).
 
-Состояние переноса — массив сумм убытков (положительные числа) по годам происхождения,
-от старшего к младшему; последняя ось длиной `anos` (4). Для базы сбережений перед ней ещё
-ось из двух корзин: [RCM — rendimientos del capital mobiliario, GP — ganancias y pérdidas].
-Функции возвращают новое состояние для следующего года: старший год выбывает, в конец
-добавляются несписанные убытки текущего года.
+The carry-forward state is an array of loss amounts (positive numbers) by year of origin,
+oldest first; the last axis has length `anos` (4). For the savings base there is one more axis
+before it with two baskets: [RCM — rendimientos del capital mobiliario, GP — ganancias y pérdidas].
+Functions return the new state for the next year: the oldest year drops out, the current year's
+unused losses are appended.
 """
 
 from __future__ import annotations
@@ -23,38 +23,40 @@ def _out(x):
 
 
 def pendientes_vacios(rules: Compensacion, shape: tuple[int, ...] = (), ahorro: bool = True):
-    """Нулевое состояние переноса: (..., 2, anos) для ahorro или (..., anos) для general."""
+    """Empty carry-forward state: (..., 2, anos) for ahorro or (..., anos) for general."""
     return np.zeros((*shape, 2, rules.anos) if ahorro else (*shape, rules.anos))
 
 
 def _consumir(importe, pendientes):
-    """Списать до importe из корзин pendientes (старшие первыми); списанное по корзинам."""
+    """Consumes up to importe from pendientes (oldest first); returns the amount used per basket."""
     importe = np.asarray(importe, dtype=float)[..., None]
     antes = np.cumsum(pendientes, axis=-1) - pendientes
     return np.clip(importe - antes, 0.0, pendientes)
 
 
 def _avanzar(pendientes, nuevas):
-    """Сдвиг на год: старший год выбывает, в конец — убытки текущего года."""
+    """Shifts one year: the oldest year drops out, the current year's losses go to the end."""
     return np.concatenate([pendientes[..., 1:], np.asarray(nuevas)[..., None]], axis=-1)
 
 
 @dataclass(frozen=True, slots=True)
 class BaseAhorro:
     base_imponible: float
-    compensado_anteriores: float  # списано убытков прошлых лет
-    pendientes: np.ndarray  # состояние на следующий год, (..., 2, anos)
+    compensado_anteriores: float  # prior-year losses used this year
+    pendientes: np.ndarray  # state for the next year, (..., 2, anos)
 
 
 def base_imponible_ahorro(rcm, ganancias, pendientes, rules: Compensacion) -> BaseAhorro:
-    """Base imponible del ahorro за год с зачётом убытков (art. 49; порядок — Manual práctico).
+    """Base imponible del ahorro for the year with loss offsetting (art. 49; order per the
+    Manual práctico).
 
-    rcm — saldo rendimientos del capital mobiliario года (проценты, дивиденды), может быть < 0.
-    ganancias — saldo ganancias y pérdidas patrimoniales года, может быть < 0.
+    rcm — saldo of rendimientos del capital mobiliario (interest, dividends); may be < 0.
+    ganancias — saldo of ganancias y pérdidas patrimoniales for the year; may be < 0.
 
-    Фаза 1: отрицательный saldo одной корзины гасится положительным другой, но не больше
-    limite_cruzado от него. Фаза 2: убытки прошлых лет сначала гасятся своей корзиной целиком,
-    затем другой — в пределах остатка того же limite_cruzado (он общий с фазой 1).
+    Step 1: a negative saldo in one basket is offset by the other basket's positive saldo, but by
+    no more than limite_cruzado of it. Step 2: prior-year losses are offset against their own
+    basket in full first, then against the other within what is left of the same limite_cruzado
+    (shared with step 1).
     """
     rcm = np.asarray(rcm, dtype=float)
     gp = np.asarray(ganancias, dtype=float)
@@ -62,11 +64,11 @@ def base_imponible_ahorro(rcm, ganancias, pendientes, rules: Compensacion) -> Ba
     lim = rules.limite_cruzado
 
     disponible = {RCM: np.maximum(rcm, 0.0), GP: np.maximum(gp, 0.0)}
-    # Сколько убытков другой корзины можно зачесть в эту (25 % её положительного saldo).
+    # How much of the other basket's losses can be offset here (25 % of its positive saldo).
     cupo = {k: lim * v for k, v in disponible.items()}
     otra = {RCM: GP, GP: RCM}
 
-    # Фаза 1: убытки текущего года зачитываются другой корзиной в пределах cupo.
+    # Step 1: current-year losses are offset by the other basket within cupo.
     nuevas = {}
     for k, saldo in ((RCM, rcm), (GP, gp)):
         perdida = np.maximum(-saldo, 0.0)
@@ -82,9 +84,9 @@ def base_imponible_ahorro(rcm, ganancias, pendientes, rules: Compensacion) -> Ba
         disponible[k_saldo] = disponible[k_saldo] - s
         return s
 
-    # Фаза 2.1: убытки прошлых лет — своей корзиной без ограничения.
+    # Step 2.1: prior-year losses — against their own basket without limit.
     total = compensar(RCM, RCM, disponible[RCM]) + compensar(GP, GP, disponible[GP])
-    # Фаза 2.2: остаток — другой корзиной в пределах оставшегося cupo.
+    # Step 2.2: the rest — against the other basket within the remaining cupo.
     total = total + compensar(RCM, GP, np.minimum(disponible[GP], cupo[GP]))
     total = total + compensar(GP, RCM, np.minimum(disponible[RCM], cupo[RCM]))
 
@@ -99,13 +101,13 @@ def base_imponible_ahorro(rcm, ganancias, pendientes, rules: Compensacion) -> Ba
 
 @dataclass(frozen=True, slots=True)
 class BaseGeneral:
-    base_liquidable: float  # после зачёта отрицательных баз прошлых лет, ≥ 0
+    base_liquidable: float  # after offsetting prior negative bases, ≥ 0
     compensado_anteriores: float
     pendientes: np.ndarray  # (..., anos)
 
 
 def compensar_base_liquidable_general(base_liquidable, pendientes, rules: Compensacion):
-    """Отрицательная base liquidable general переносится на 4 года (art. 50.3 LIRPF)."""
+    """A negative base liquidable general is carried forward 4 years (art. 50.3 LIRPF)."""
     blg = np.asarray(base_liquidable, dtype=float)
     pend = np.asarray(pendientes, dtype=float)
     positiva = np.maximum(blg, 0.0)

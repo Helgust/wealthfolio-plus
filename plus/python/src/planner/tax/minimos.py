@@ -1,4 +1,4 @@
-"""Mínimo personal y familiar (arts. 56–61 LIRPF) по составу домохозяйства."""
+"""Mínimo personal y familiar (arts. 56–61 LIRPF) by household composition."""
 
 from __future__ import annotations
 
@@ -17,27 +17,27 @@ class Discapacidad(StrEnum):
 
 
 class Persona(BaseModel):
-    """Возраст — на 31 декабря года расчёта (дата devengo, art. 61 LIRPF)."""
+    """Age on 31 December of the tax year (devengo date, art. 61 LIRPF)."""
 
     model_config = ConfigDict(frozen=True)
 
     edad: int = Field(ge=0)
     discapacidad: Discapacidad = Discapacidad.NINGUNA
-    asistencia: bool = False  # нужна помощь третьих лиц / ограниченная мобильность
+    asistencia: bool = False  # needs third-party assistance / reduced mobility
 
 
 class Familiar(Persona):
-    """Descendiente или ascendiente, живущий с налогоплательщиком."""
+    """Descendiente or ascendiente living with the taxpayer."""
 
-    renta_anual: float = 0.0  # доходы иждивенца без exentas; выше лимита — права нет
-    # Доля, приходящаяся на этого налогоплательщика: при нескольких правообладателях
-    # (например, оба родителя декларируют по отдельности) mínimo делится поровну (art. 61).
+    renta_anual: float = 0.0  # dependant's income excluding exentas; above the limit, no right
+    # Share attributable to this taxpayer: with several eligible taxpayers
+    # (e.g. both parents file separately) the mínimo is split equally (art. 61).
     share: float = Field(default=1.0, gt=0, le=1)
 
 
 @dataclass(frozen=True, slots=True)
 class Mitades:
-    """Величина, считаемая отдельно для государственной и автономной половины IRPF."""
+    """An amount computed separately for the state and regional halves of IRPF."""
 
     estatal: float
     autonomica: float
@@ -52,12 +52,13 @@ def _discapacidad(p: Persona, a: DiscapacidadAmounts) -> float:
         return 0.0
     grado_65 = p.discapacidad == Discapacidad.GRADO_65
     base = a.grado_65 if grado_65 else a.grado_33
-    # Прибавка за gastos de asistencia: помощь третьих лиц, мобильность или grado ≥ 65 % (art. 60).
+    # Increment for gastos de asistencia: third-party help, mobility or grado ≥ 65 % (art. 60).
     return base + (a.asistencia if p.asistencia or grado_65 else 0.0)
 
 
 def _incrementos_contribuyente(p: Persona, a: MinimoAmounts, c: MinimoConditions) -> float:
-    """Прибавки к mínimo del contribuyente за возраст (art. 57.2) и discapacidad (art. 60.1)."""
+    """Increments to the mínimo del contribuyente for age (art. 57.2) and discapacidad
+    (art. 60.1)."""
     total = _discapacidad(p, a.discapacidad)
     if p.edad >= c.edad_mayor_65:
         total += a.contribuyente.mayor_65
@@ -73,12 +74,12 @@ def _minimo_mitad(
     a: MinimoAmounts,
     c: MinimoConditions,
 ) -> float:
-    # Общая сумма — одна на декларацию и в conjunta; прибавки — по каждому супругу (art. 84.2.2º).
+    # The general amount is one per return, in conjunta too; increments per spouse (art. 84.2.2º).
     total = a.contribuyente.general
     total += sum(_incrementos_contribuyente(p, a, c) for p in contribuyentes)
 
-    # Descendientes: младше 25 или с discapacidad; доходы не выше лимита. Порядок — по возрасту
-    # (старший — «первый»), сумма зависит от номера ребёнка (art. 58.1).
+    # Descendientes: under 25 or with discapacidad; income within the limit. Ordered by age
+    # (the oldest is the "first"); the amount depends on the child's number (art. 58.1).
     eligible = sorted(
         (
             d
@@ -96,7 +97,7 @@ def _minimo_mitad(
             amount += a.descendientes.menor_3
         total += (amount + _discapacidad(d, a.discapacidad)) * d.share
 
-    # Ascendientes: старше 65 или с discapacidad; доходы не выше лимита (art. 59).
+    # Ascendientes: over 65 or with discapacidad; income within the limit (art. 59).
     for p in ascendientes:
         if p.renta_anual > c.renta_max_familiar:
             continue
@@ -116,10 +117,10 @@ def minimo_personal_familiar(
     descendientes: list[Familiar] | None = None,
     ascendientes: list[Familiar] | None = None,
 ) -> Mitades:
-    """Mínimo personal y familiar отдельно для государственной и автономной половины.
+    """Mínimo personal y familiar separately for the state and regional halves.
 
-    Условия «живёт вместе» и прочие неденежные проверяет вызывающий: сюда передаются
-    только те родственники, по которым налогоплательщик вообще может претендовать на mínimo.
+    "Lives together" and other non-monetary conditions are checked by the caller: pass only
+    relatives for whom the taxpayer can claim the mínimo at all.
     """
     return _minimo([contribuyente], rules, descendientes, ascendientes)
 
@@ -130,11 +131,11 @@ def minimo_conjunta(
     descendientes: list[Familiar] | None = None,
     ascendientes: list[Familiar] | None = None,
 ) -> Mitades:
-    """Mínimo personal y familiar в tributación conjunta (art. 84.2.2º LIRPF).
+    """Mínimo personal y familiar in tributación conjunta (art. 84.2.2º LIRPF).
 
-    Mínimo del contribuyente (art. 57.1) — один на unidad familiar; прибавки за возраст
-    и discapacidad — по обстоятельствам каждого супруга. Дети передаются как descendientes
-    (share=1: вся сумма в одной декларации), mínimo del contribuyente на них не положен.
+    The mínimo del contribuyente (art. 57.1) is one per unidad familiar; age and discapacidad
+    increments follow each spouse's circumstances. Children are passed as descendientes
+    (share=1: the whole amount in one return); no mínimo del contribuyente is due for them.
     """
     return _minimo(conyuges, rules, descendientes, ascendientes)
 
