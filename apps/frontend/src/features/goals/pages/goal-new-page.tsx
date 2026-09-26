@@ -69,6 +69,7 @@ export default function GoalNewPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState(0);
+  const [startingAmount, setStartingAmount] = useState(0);
   const [targetDate, setTargetDate] = useState("");
   const [retirementBirthYearMonth, setRetirementBirthYearMonth] = useState(
     DEFAULT_RETIREMENT_BIRTH_YEAR_MONTH,
@@ -165,6 +166,7 @@ export default function GoalNewPage() {
     setTitle(nextTemplate.title);
     setDescription(nextTemplate.description);
     setTargetAmount(nextTemplate.defaultTarget);
+    setStartingAmount(0);
     setTargetDate("");
     setRetirementBirthYearMonth(DEFAULT_RETIREMENT_BIRTH_YEAR_MONTH);
     setRetirementTargetAge(DEFAULT_TRADITIONAL_RETIREMENT_AGE);
@@ -203,7 +205,12 @@ export default function GoalNewPage() {
             }),
           ),
         }
-      : undefined;
+      : startingAmount > 0
+        ? {
+            planKind: "save_up" as const,
+            settingsJson: JSON.stringify({ startingAmount }),
+          }
+        : undefined;
 
     createGoalFlow.mutate(
       {
@@ -426,6 +433,23 @@ export default function GoalNewPage() {
                         />
                       </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="goal-starting-amount">
+                          {t("goals:new.starting_amount")}
+                        </Label>
+                        <MoneyInput
+                          name="goal-starting-amount"
+                          value={startingAmount}
+                          onValueChange={(value) => setStartingAmount(value ?? 0)}
+                          thousandSeparator
+                          maxDecimalPlaces={2}
+                          className="w-full"
+                        />
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {t("goals:new.starting_amount_hint")}
+                        </p>
+                      </div>
+
                       <div className="text-muted-foreground flex items-end text-xs leading-relaxed">
                         {t("goals:new.funding_hint")}
                       </div>
@@ -443,6 +467,7 @@ export default function GoalNewPage() {
                   setSelectedType(null);
                   setTitle("");
                   setDescription("");
+                  setStartingAmount(0);
                   setTargetDate("");
                   setPlannerMode("traditional");
                   setRetirementBirthYearMonth(DEFAULT_RETIREMENT_BIRTH_YEAR_MONTH);

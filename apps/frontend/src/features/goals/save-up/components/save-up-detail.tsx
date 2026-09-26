@@ -51,6 +51,8 @@ interface SaveUpPlanSettings {
   /** Legacy field name; read-only fallback for goals saved before the rename. */
   plannedMonthlyContribution?: number;
   expectedAnnualReturn?: number;
+  /** Amount saved outside funding accounts; the backend adds it to the goal's current value. */
+  startingAmount?: number;
 }
 
 function parseSaveUpSettings(plan: GoalPlan | null | undefined): SaveUpPlanSettings {
@@ -72,6 +74,8 @@ function parseSaveUpSettings(plan: GoalPlan | null | undefined): SaveUpPlanSetti
         typeof settings.expectedAnnualReturn === "number"
           ? settings.expectedAnnualReturn
           : undefined,
+      startingAmount:
+        typeof settings.startingAmount === "number" ? settings.startingAmount : undefined,
     };
   } catch {
     return {};
@@ -107,7 +111,7 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
   const { updateMutation } = useGoalMutations();
   const existingSettings = parseSaveUpSettings(plan);
   const progress = overview?.progress ?? goal.summaryProgress ?? 0;
-  const currentValue = overview?.currentValue ?? goal.summaryCurrentValue ?? 0;
+  const persistedCurrentValue = overview?.currentValue ?? goal.summaryCurrentValue ?? 0;
   const currency = settings?.baseCurrency ?? goal.currency ?? "USD";
   const moneyPrefix = amountFormatting.formatCurrencySymbol(currency);
   const initialTargetAmount = goal.targetAmount ?? 0;
@@ -115,12 +119,17 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
   const initialMonthlyContribution =
     existingSettings.monthlyContribution ?? existingSettings.plannedMonthlyContribution ?? 0;
   const initialAnnualReturn = existingSettings.expectedAnnualReturn ?? 0.05;
+  const initialStartingAmount = existingSettings.startingAmount ?? 0;
 
   // Editable fields
   const [targetAmount, setTargetAmount] = useState(initialTargetAmount);
   const [targetDate, setTargetDate] = useState(initialTargetDate);
   const [monthlyContribution, setMonthlyContribution] = useState(initialMonthlyContribution);
   const [annualReturn, setAnnualReturn] = useState(initialAnnualReturn);
+  const [startingAmount, setStartingAmount] = useState(initialStartingAmount);
+
+  // The persisted value already includes the saved starting amount; apply the draft delta.
+  const currentValue = persistedCurrentValue + startingAmount - initialStartingAmount;
 
   const [isEditingPlan, setIsEditingPlan] = useState(false);
   const displayProgress = targetAmount > 0 ? Math.min(currentValue / targetAmount, 1) : progress;
@@ -129,12 +138,14 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
     targetAmount !== initialTargetAmount ||
     targetDate !== initialTargetDate ||
     monthlyContribution !== initialMonthlyContribution ||
-    annualReturn !== initialAnnualReturn;
+    annualReturn !== initialAnnualReturn ||
+    startingAmount !== initialStartingAmount;
   const persistedPlanKey = JSON.stringify([
     initialTargetAmount,
     initialTargetDate,
     initialMonthlyContribution,
     initialAnnualReturn,
+    initialStartingAmount,
   ]);
 
   useEffect(() => {
@@ -143,6 +154,7 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
     setTargetDate(initialTargetDate);
     setMonthlyContribution(initialMonthlyContribution);
     setAnnualReturn(initialAnnualReturn);
+    setStartingAmount(initialStartingAmount);
     // Only sync when persisted values change. Toggling edit mode should not snap drafts back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistedPlanKey]);
@@ -197,6 +209,7 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
       targetAmount,
       monthlyContribution,
       expectedAnnualReturn: annualReturn,
+      startingAmount,
     };
 
     savePlanMutation.mutate({
@@ -224,6 +237,7 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
     targetDate,
     monthlyContribution,
     annualReturn,
+    startingAmount,
     currentValue,
     projection,
     savePlanMutation,
@@ -235,8 +249,15 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
     setTargetDate(initialTargetDate);
     setMonthlyContribution(initialMonthlyContribution);
     setAnnualReturn(initialAnnualReturn);
+    setStartingAmount(initialStartingAmount);
     setIsEditingPlan(false);
-  }, [initialTargetAmount, initialTargetDate, initialMonthlyContribution, initialAnnualReturn]);
+  }, [
+    initialTargetAmount,
+    initialTargetDate,
+    initialMonthlyContribution,
+    initialAnnualReturn,
+    initialStartingAmount,
+  ]);
 
   const status = getSaveUpStatus(
     {
@@ -449,6 +470,13 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
               <SidebarRow label={t("goals:save_up.field_target_date")}>
                 {targetDateLabel ?? t("goals:save_up.not_set")}
               </SidebarRow>
+              <SidebarRow label={t("goals:save_up.field_starting_amount")}>
+                <AmountDisplay
+                  value={startingAmount}
+                  currency={currency}
+                  isHidden={isBalanceHidden}
+                />
+              </SidebarRow>
               <SidebarRow label={t("goals:save_up.field_monthly_contribution")}>
                 <AmountDisplay
                   value={monthlyContribution}
@@ -484,6 +512,19 @@ export default function SaveUpDetailPage({ goal, plan, overview }: Props) {
                 hint={t("goals:save_up.hint_target_date")}
                 value={targetDate}
                 onChange={setTargetDate}
+              />
+              <LeverRow
+                label={t("goals:save_up.field_starting_amount")}
+                hint={t("goals:save_up.hint_starting_amount")}
+                kind="money"
+                value={startingAmount}
+                onChange={setStartingAmount}
+                min={0}
+                max={sliderMaxFor(startingAmount, 100_000, 25_000)}
+                inputMax={SAVE_UP_MAX_TARGET_AMOUNT}
+                step={100}
+                prefix={moneyPrefix}
+                format={(v) => numberFormatting.formatDecimal(Math.round(v))}
               />
               <LeverRow
                 label={t("goals:save_up.field_monthly_contribution")}
