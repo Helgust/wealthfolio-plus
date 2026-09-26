@@ -491,7 +491,6 @@ export function createSDKHostAPIBridge(
       getIncomeSummary: internalAPI.getIncomeSummary,
       getHistoricalValuations: internalAPI.getHistoricalValuations,
       getLatestValuations: internalAPI.getLatestValuations,
-      getAlternativeHoldings: internalAPI.getAlternativeHoldings,
       getNetWorth: internalAPI.getNetWorth,
     },
     "portfolio",

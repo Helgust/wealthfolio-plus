@@ -143,14 +143,6 @@ export interface PortfolioAPI {
   getLatestValuations(accountIds: string[]): Promise<AccountValuation[]>;
 
   /**
-   * Get alternative assets and liabilities (property, vehicles, loans, …)
-   * with their latest valuations. They are not tied to accounts, so
-   * `getHoldings(accountId)` does not return them.
-   * @returns Promise resolving to array of alternative asset holdings
-   */
-  getAlternativeHoldings(): Promise<AlternativeAssetHolding[]>;
-
-  /**
    * Get net worth (assets minus liabilities) in base currency, as on the
    * Net Worth page.
    * @param date - As-of date (YYYY-MM-DD); defaults to today
