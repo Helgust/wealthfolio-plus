@@ -245,8 +245,19 @@ pub fn detect_addon_permissions(addon_files: &[AddonFile]) -> Vec<AddonPermissio
                 "checkImport",
                 "getImportMapping",
                 "saveImportMapping",
+                "getTransferPair",
+                "findTransferMatchCandidates",
+                "saveTransferPair",
+                "linkTransfer",
+                "unlinkTransfer",
             ],
             "Access to transaction history and activity management",
+        ),
+        (
+            "activities",
+            "spending",
+            vec!["searchCashActivities"],
+            "Access to categorized spending transactions",
         ),
         (
             "accounts",
@@ -320,12 +331,13 @@ pub fn detect_addon_permissions(addon_files: &[AddonFile]) -> Vec<AddonPermissio
             vec![
                 "isEnabled",
                 "getCategories",
+                "getReport",
                 "getRules",
                 "saveRule",
                 "deleteRule",
                 "rerunRules",
             ],
-            "Access to spend categories and categorization rules",
+            "Access to spending reports, categories, and categorization rules",
         ),
         (
             "settings",
@@ -1652,7 +1664,7 @@ pub async fn check_addon_update_from_api(
         ADDON_STORE_API_BASE_URL, addon_id, current_version
     );
 
-    let client = reqwest::Client::new();
+    let client = wealthfolio_http::client();
     let response = create_request_with_headers(&client, reqwest::Method::GET, &api_url)
         .send()
         .await
@@ -1711,7 +1723,7 @@ async fn download_addon_package_with_optional_sha256(
 ) -> Result<Vec<u8>, String> {
     log::info!("Downloading addon package from URL: {}", download_url);
 
-    let client = reqwest::Client::new();
+    let client = wealthfolio_http::client();
     let mut request = client.get(download_url);
 
     // Always add User-Agent, with version if available
@@ -1826,7 +1838,7 @@ pub async fn download_addon_from_store(addon_id: &str) -> Result<Vec<u8>, String
         addon_id,
         download_api_url
     );
-    let client = reqwest::Client::new();
+    let client = wealthfolio_http::client();
     let response = create_request_with_headers(&client, reqwest::Method::GET, &download_api_url)
         .send()
         .await
@@ -2116,7 +2128,7 @@ pub async fn fetch_addon_store_listings() -> Result<Vec<serde_json::Value>, Stri
     // Fetch all addons and let frontend filter by status
     let api_url = ADDON_STORE_API_BASE_URL.to_string();
 
-    let client = reqwest::Client::new();
+    let client = wealthfolio_http::client();
     let response = create_request_with_headers(&client, reqwest::Method::GET, &api_url)
         .send()
         .await
@@ -2194,7 +2206,7 @@ pub async fn submit_addon_rating(
         request_body["review"] = serde_json::Value::String(review_text);
     }
 
-    let client = reqwest::Client::new();
+    let client = wealthfolio_http::client();
     let response = create_request_with_headers(&client, reqwest::Method::POST, &api_url)
         .header("X-Instance-Id", rating_instance_id)
         .json(&request_body)
