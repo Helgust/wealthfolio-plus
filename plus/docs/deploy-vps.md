@@ -91,11 +91,18 @@ sudo apt install -y argon2
 printf 'ваш-пароль' | argon2 "$(openssl rand -base64 12)" -id -e   # → WF_AUTH_PASSWORD_HASH
 ```
 
-Пароль можно взять тот же, что у основного, но `WF_SECRET_KEY` — новый: им подписываются сессии
-и шифруются секреты этого экземпляра.
+Пароль можно взять тот же, что у основного. `WF_SECRET_KEY` подписывает сессии и шифрует секреты
+экземпляра (`secrets.json` в папке данных, не в базе); отдельный ключ для форка надёжнее, но и
+общий работает.
 
-`~/wealthfolio-dev/.env` (права `chmod 600 .env`; хеш — в одинарных кавычках, иначе Compose съест
-знаки `$`):
+Проще всего взять `.env` основного экземпляра (у официального compose это `.env` или `.env.docker`
+рядом с его `compose.yaml`): скопировать в `~/wealthfolio-dev/.env` и поменять
+`WF_CORS_ALLOW_ORIGINS` на адрес форка. Хеш пароля остаётся тем же, `WF_SECRET_KEY` можно оставить
+или заменить: `sed -i "s|^WF_SECRET_KEY=.*|WF_SECRET_KEY=$(openssl rand -base64 32)|" .env`. `WF_PORT`
+форк не читает. Проверка после создания `compose.yml`: `docker compose config --quiet && echo ok`.
+
+Или с нуля — `~/wealthfolio-dev/.env` (права `chmod 600 .env`; хеш — в одинарных кавычках, иначе
+Compose съест знаки `$`):
 
 ```
 WF_SECRET_KEY=<ключ>
