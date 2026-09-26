@@ -83,6 +83,11 @@
   Prettier ждёт LF. Изменённые файлы проверять `npx prettier --check --end-of-line auto <файлы>`.
 - В полном `pnpm test` под нагрузкой (например, параллельно с `cargo`) тесты UI падают по таймауту
   5 с (`spending-date-picker`); отдельно проходят.
+- Браузеры Playwright: `NODE_USE_SYSTEM_CA=1 pnpm exec playwright install chromium firefox webkit`.
+  Без переменной загрузка падает с `SELF_SIGNED_CERT_IN_CHAIN`: TLS перехватывается, и Node должен
+  доверять хранилищу сертификатов Windows.
+- `pnpm test:e2e:addon-sandbox` на Windows не завершается после тестов: `vite preview` на :4174
+  остаётся жить. Итог — в `test-results/.last-run.json`; preview остановить вручную.
 - `plus/addon` — отдельный pnpm-workspace (свой `pnpm-workspace.yaml`): `.npmrc` с `ignore-workspace`
   pnpm 10 игнорирует и ставит корневой workspace.
 - Шаблон аддона 3.8.0 задавал `build.watch` в `vite.config.ts`, из-за чего `pnpm build` не завершался;
