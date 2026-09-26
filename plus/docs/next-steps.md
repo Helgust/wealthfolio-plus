@@ -69,9 +69,20 @@
   `spawn("pnpm")` без shell; `pnpm.cmd` из npm Node 24 так не запускает (`spawn pnpm ENOENT`).
   `WinGet\Links` в PATH стоит раньше `AppData\Roaming\npm`.
 - `~/.cargo/bin` может не быть в PATH Bash-инструмента: `export PATH="$HOME/.cargo/bin:$PATH"`.
-- Запуск форка: `VITE_ENABLE_ADDON_DEV_MODE=true pnpm tauri dev --config plus/tauri.dev.conf.json`;
+- Запуск форка: `VITE_ENABLE_ADDON_DEV_MODE=true pnpm exec tauri dev --config plus/tauri.dev.conf.json`;
   аддон: `pnpm dev:server` в `plus/addon`. `tauri dev` перезаписывает окончания строк в
-  `apps/tauri/Cargo.toml` — в коммит не брать.
+  `apps/tauri/Cargo.toml` — в коммит не брать. **Не `pnpm tauri dev`**: с 3.9 обёртка
+  `scripts/tauri.mjs` последним подкладывает `apps/tauri/tauri.dev.conf.json` с `identifier`
+  `com.teymz.wealthfolio.dev`, и открывается пустая база в другой папке.
+- **Сборке Rust с 3.9 нужен полный Perl**: SQLCipher тянет встроенный OpenSSL. Perl из Git for Windows
+  падает с `Can't locate Locale/Maketext/Simple.pm`. Установлен портативный Strawberry Perl в
+  `%LOCALAPPDATA%\Programs\strawberry-perl`, путь к `perl.exe` — в переменной пользователя
+  `OPENSSL_SRC_PERL`. VS Code, открытый до её появления, её не видит: `dev.ps1` читает её сам,
+  в Bash-инструменте — `export OPENSSL_SRC_PERL=...`.
+- `pnpm check` падает на `format:check` почти по всем файлам: `core.autocrlf=true` даёт CRLF, а
+  Prettier ждёт LF. Изменённые файлы проверять `npx prettier --check --end-of-line auto <файлы>`.
+- В полном `pnpm test` под нагрузкой (например, параллельно с `cargo`) тесты UI падают по таймауту
+  5 с (`spending-date-picker`); отдельно проходят.
 - `plus/addon` — отдельный pnpm-workspace (свой `pnpm-workspace.yaml`): `.npmrc` с `ignore-workspace`
   pnpm 10 игнорирует и ставит корневой workspace.
 - Шаблон аддона 3.8.0 задавал `build.watch` в `vite.config.ts`, из-за чего `pnpm build` не завершался;

@@ -208,7 +208,7 @@ ignidash ([ignidash-fork-plan.md](ignidash-fork-plan.md)), второй — Weal
 - **Никаких своих миграций БД.** Upstream добавляет миграции по датам (сейчас их 51). Своя миграция в той
   же базе ломает будущие обновления и возврат на официальную сборку. Если без изменения схемы никак —
   сначала предлагаем изменение в upstream.
-- **Основа — релизы, а не `main`.** Ветка `plus` начинается с последнего тега (сейчас `v3.8.0`); новый
+- **Основа — релизы, а не `main`.** Ветка `plus` стоит на последнем теге (сейчас `v3.9.0`); новый
   релиз вливаем мержем его тега (почему не ребейз — в разделе «Репозиторий и рабочий процесс»). После
   мержа: `pnpm check`, тесты затронутых крейтов, `pnpm test:e2e:addon-sandbox`, сборка установщика.
 - **Одна правка — один коммит** с пометкой, предложена ли она в upstream. Принятое в upstream из форка
@@ -219,7 +219,11 @@ ignidash ([ignidash-fork-plan.md](ignidash-fork-plan.md)), второй — Weal
 - Репозиторий — `github.com/Helgust/wealthfolio_plus`, публичный GitHub-форк. Как он устроен — в разделе
   «Репозиторий и рабочий процесс».
 - Инструменты — как в upstream: Node 24, pnpm 10.33 (standalone `pnpm.exe`, см. `next-steps.md`), Rust из
-  `rust-toolchain.toml` (для `v3.8.0` — 1.95.0), Visual Studio Build Tools (C++), WebView2 (в Windows 11 уже есть). Установщик собирается командой `pnpm tauri build`.
+  `rust-toolchain.toml` (для `v3.9.0` — 1.98.1), Visual Studio Build Tools (C++), WebView2 (в Windows 11 уже есть). Установщик собирается командой `pnpm tauri build`.
+- С 3.9 база шифруется SQLCipher со встроенным OpenSSL, и его сборке нужен полный Perl. Perl из Git
+  for Windows не подходит (нет `Locale::Maketext::Simple`): стоит портативный Strawberry Perl в
+  `%LOCALAPPDATA%\Programs\strawberry-perl`, путь к `perl.exe` — в переменной пользователя
+  `OPENSSL_SRC_PERL`.
 - Сборка из исходников заодно даёт горячую перезагрузку аддона при разработке.
 - Автообновление в форке выключаем (плагин `updater`, настройки в `apps/tauri/tauri.conf.json`), иначе
   официальное обновление встанет поверх форка.
@@ -256,19 +260,31 @@ wealthfolio_plus/
 
 - `main` — зеркало upstream, в него не коммитим. Его можно вообще не трогать: обновления берём из remote
   `upstream`.
-- `plus` — рабочая ветка от тега `v3.8.0`. От `main` не начинаем: там уже неопубликованные изменения 3.9
-  и новые миграции базы. На GitHub делаем `plus` веткой по умолчанию.
+- `plus` — рабочая ветка от тега `v3.8.0`, в неё влит `v3.9.0`. От `main` не начинаем: там
+  неопубликованные изменения следующего релиза и новые миграции базы. На GitHub делаем `plus` веткой
+  по умолчанию.
 
 Обновление до нового релиза Wealthfolio:
 
 ```
 git fetch upstream --tags
 git switch plus
-git merge v3.9.0       # конфликты возможны только в наших правках файлов Wealthfolio
+git merge vX.Y.Z       # конфликты возможны только в наших правках файлов Wealthfolio
 pnpm install
 pnpm check             # затем тесты затронутых крейтов и сборка
 git push
 ```
+
+Мерж `v3.9.0` (27.09.2026, 297 коммитов): текстовых конфликтов не было, но сборка и тесты ломались
+в трёх местах. Поэтому после мержа обязательны `pnpm type-check` и полный `pnpm test`:
+
+- upstream добавил то же, что наша правка: `alternativeAssets.getAll` вместо нашего
+  `portfolio.getAlternativeHoldings`. Git склеил оба варианта, и появились двойные импорты и типы.
+  Нашу правку удалили, аддон перешёл на upstream;
+- новые тесты upstream проверяют то, что форк меняет: каталог zh-Hant обязан содержать все английские
+  ключи, включая наши, а тест формы Retirement пропущен, потому что в форке шаблон ведёт в аддон;
+- `pnpm tauri dev` запускается через обёртку `scripts/tauri.mjs`, и она последним подкладывает свой
+  `identifier`. Поэтому `plus/scripts/dev.ps1` вызывает `pnpm exec tauri dev`.
 
 Мержим, а не ребейзим: в `plus` будут сотни наших коммитов (аддон, Python, документы), и ребейз
 переписывал бы их на каждом релизе, а потом требовал force-push. Наши правки файлов Wealthfolio всегда
@@ -276,14 +292,16 @@ git push
 
 Аддон — отдельный пакет в `plus/addon/` со своим lock-файлом, вне pnpm-workspace Wealthfolio. Иначе его
 зависимости попали бы в общий `pnpm-lock.yaml` и конфликтовали при каждом обновлении. SDK, UI и dev-tools
-берём из npm той же версии, что база форка: сейчас это 3.8.0, она опубликована. Если понадобится API,
-которого нет в официальном SDK (например, место на дашборде), подключаем `packages/addon-sdk` форка
-через `link:`.
+берём из npm той же версии, что база форка. SDK 3.9 в npm пока нет (27.09.2026), поэтому аддон
+остаётся на 3.8.0, а `alternativeAssets.getAll` вызывает через приведение типа
+(`src/lib/fork-api.ts`). Если понадобится API, которого нет в официальном SDK (например, место на
+дашборде), подключаем `packages/addon-sdk` форка через `link:`.
 
 Разработка:
 
-- Терминал 1, корень форка: `VITE_ENABLE_ADDON_DEV_MODE=true pnpm tauri dev --config plus/tauri.dev.conf.json`
-  (данные — в `%APPDATA%\com.helgust.wealthfolio-plus.dev`).
+- Терминал 1, корень форка: `VITE_ENABLE_ADDON_DEV_MODE=true pnpm exec tauri dev --config plus/tauri.dev.conf.json`
+  (данные — в `%APPDATA%\com.helgust.wealthfolio-plus.dev`). Не `pnpm tauri`: с 3.9 он подменяет
+  `identifier` на `com.teymz.wealthfolio.dev`, и открывается другая, пустая база.
 - Терминал 2, `plus/addon`: `pnpm dev:server` — аддон перезагружается на лету.
 - Python-эталон — в `plus/python`, со своим `.venv`; тесты запускаются как раньше.
 
@@ -373,7 +391,7 @@ Wealthfolio 3.8.0, разрабатываем через сборку ZIP и ч�
 
 | Проверка | Результат |
 |---|---|
-| Чтение данных | Счета, позиции с `lots`, история стоимости, доходы — есть в API. **Альтернативных активов и долгов в API аддонов 3.8.0 нет**: это отдельные активы вне счетов (`get_alternative_holdings`), `getHoldings(accountId)` их не возвращает. Добавлено в форк: `portfolio.getAlternativeHoldings()` (коммит `feat(fork/addons)`, кандидат в upstream). Проверка на реальных данных — за пользователем |
+| Чтение данных | Счета, позиции с `lots`, история стоимости, доходы — есть в API. **Альтернативных активов и долгов в API аддонов 3.8.0 нет**: это отдельные активы вне счетов (`get_alternative_holdings`), `getHoldings(accountId)` их не возвращает. Добавлено в форк: `portfolio.getAlternativeHoldings()` (коммит `feat(fork/addons)`, кандидат в upstream). Проверка на реальных данных — за пользователем. В 3.9 upstream добавил `alternativeAssets.getAll`: аддон перешёл на него, правка форка удалена |
 | `storage`, JSON 100 КБ | Лимит значения — 250 000 символов (`MAX_ADDON_STORAGE_SYNC_PAYLOAD_LEN`), 100 КБ проходит с запасом. Запись/чтение и переживание перезапуска — кнопкой на странице |
 | 1 000 траекторий × 40 лет | Черновой движок (`src/lib/phase0-bench.ts`): 8–16 мс в Node 24 при бюджете 2 000 мс. Замер в песочнице — кнопкой на странице |
 | Русские строки | **Через `registerTranslations` — нет**: язык аддона всегда один из языков хоста (en, fr, de, es, pt, zh, zh-Hant, ja, ko, it), пакет `ru` не выбирается. Варианты: `ru` в самом Wealthfolio (форк) или свой i18next в аддоне |
@@ -557,10 +575,10 @@ rescate плана пенсий — через порядок изъятий н�
    - Сначала эталон: `rules/<год>/inmuebles.yaml` — imputación de rentas (art. 85 LIRPF), exención
      por reinversión (art. 38 LIRPF, art. 41 RIRPF), ITP Comunitat Valenciana — с источниками
      BOE/DOGV; функции в `planner.tax`, тесты, выгрузка в TS.
-   - Недвижимость и долги — из `getAlternativeHoldings` (форк). Wealthfolio даёт стоимость, цену
-     и дату покупки, у долга — исходную сумму, дату, ставку и связь с активом. Остальное задаётся
-     в аддоне (`properties.v1`, общий для планов): vivienda habitual или нет, valor catastral,
-     IBI € в год, доля владения; у кредита — ежемесячный платёж или срок.
+   - Недвижимость и долги — из `alternativeAssets.getAll` (Wealthfolio 3.9+). Wealthfolio даёт
+     стоимость, цену и дату покупки, у долга — исходную сумму, дату, ставку и связь с активом.
+     Остальное задаётся в аддоне (`properties.v1`, общий для планов): vivienda habitual или нет,
+     valor catastral, IBI € в год, доля владения; у кредита — ежемесячный платёж или срок.
    - События плана: продажа (прирост в базе сбережений, exención por reinversión), покупка (ITP),
      аннуитет кредита.
    - Тест: продажа vivienda habitual с реинвестицией не даёт прироста в базе сбережений
@@ -612,10 +630,10 @@ rescate плана пенсий — через порядок изъятий н�
   выше 1 млн € — 11 %; IVA 10 % на новое жильё (art. 91 Ley 37/1992); AJD 0,1 % для vivienda
   habitual, иначе 1,4 % (1,5 % до 01.06.2026). Ставки 2026 года модель применяет ко всему году.
   Функции — `planner.tax.inmuebles` и порт `es-tax/inmuebles.ts`, сверены на golden-фикстурах.
-  Недвижимость и долги — из `getAlternativeHoldings` (форк; `kind` приходит как `PROPERTY` /
-  `LIABILITY`); настройки — `properties.v1` на вкладке Accounts: назначение (vivienda habitual,
-  second home, сдаётся, вне модели), владелец, valor catastral и его ревизия, IBI, расходы при
-  покупке; у кредита — ежемесячный платёж (без него долг стоит на месте). Движок
+  Недвижимость и долги — из `alternativeAssets.getAll` (Wealthfolio 3.9+; `kind` приходит как
+  `PROPERTY` / `LIABILITY`); настройки — `properties.v1` на вкладке Accounts: назначение
+  (vivienda habitual, second home, сдаётся, вне модели), владелец, valor catastral и его ревизия,
+  IBI, расходы при покупке; у кредита — ежемесячный платёж (без него долг стоит на месте). Движок
   (`engine/real-estate.ts`): рост стоимости, IBI, imputación в общую базу, аннуитет кредита,
   продажа (прирост в базу сбережений минус освобождение; реинвестиция — покупки vivienda
   habitual за 2 года до или после, если их год уже известен), покупка с ITP или IVA + AJD
