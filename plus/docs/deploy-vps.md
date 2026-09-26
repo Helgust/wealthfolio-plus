@@ -224,13 +224,24 @@ money-dev.example.com {
 }
 ```
 
-**nginx на VPS** (без Cloudflare сертификат затем получает `sudo certbot --nginx -d
-money-dev.example.com`):
+**nginx на VPS.** Проще всего скопировать файл сайта основного экземпляра и поменять в нём
+`server_name` и `proxy_pass`. Посмотреть, как настроен основной:
+
+```bash
+sudo nginx -T 2>/dev/null | grep -nE "server_name|listen|proxy_pass|ssl_certificate"
+```
+
+С сертификатом на VPS (Cloudflare Full / Full (strict) или свой сертификат):
 
 ```nginx
 server {
-    listen 80;
+    listen 443 ssl;
     server_name money-dev.example.com;
+
+    ssl_certificate     /путь/как/у/основного.pem;
+    ssl_certificate_key /путь/как/у/основного.key;
+
+    client_max_body_size 50m;          # импорт CSV и бэкапов
 
     location / {
         proxy_pass http://127.0.0.1:8089;
@@ -238,10 +249,31 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_buffering off;
+        proxy_buffering off;           # поток событий (SSE)
         proxy_read_timeout 1h;
     }
 }
+
+server {
+    listen 80;
+    server_name money-dev.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+Сертификат должен покрывать поддомен — в выводе
+`sudo openssl x509 -in <сертификат> -noout -ext subjectAltName` есть `*.example.com` или
+`money-dev.example.com`. Без Cloudflare и без wildcard сертификат выпускает
+`sudo certbot --nginx -d money-dev.example.com`. При Cloudflare Flexible — один блок `listen 80`
+с тем же `location` (без `return 301`: иначе бесконечная переадресация) и
+`X-Forwarded-Proto $http_x_forwarded_proto`.
+
+Включить и проверить до настройки DNS (контейнер форка уже запущен):
+
+```bash
+sudo ln -s /etc/nginx/sites-available/money-dev /etc/nginx/sites-enabled/   # если основной включён так же
+sudo nginx -t && sudo systemctl reload nginx
+curl -sk --resolve money-dev.example.com:443:127.0.0.1 https://money-dev.example.com/api/v1/healthz   # ok
 ```
 
 **Прокси в контейнере** (Caddy, Traefik, Nginx Proxy Manager в Docker): `127.0.0.1` внутри его
