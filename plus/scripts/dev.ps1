@@ -23,4 +23,8 @@ while ($true) {
 
 Set-Location $root
 $env:VITE_ENABLE_ADDON_DEV_MODE = 'true'
-pnpm tauri dev --config plus/tauri.dev.conf.json
+# Vendored OpenSSL (SQLCipher) needs a full Perl; a VS Code started before the variable was set lacks it.
+$env:OPENSSL_SRC_PERL ??= [Environment]::GetEnvironmentVariable('OPENSSL_SRC_PERL', 'User')
+# Not `pnpm tauri`: since 3.9 it appends apps/tauri/tauri.dev.conf.json last, and its identifier
+# (com.teymz.wealthfolio.dev) would override ours along with the data directory.
+pnpm exec tauri dev --config plus/tauri.dev.conf.json
