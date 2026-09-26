@@ -67,10 +67,16 @@
         "getHistoricalValuations",
         "getLatestValuations",
         "getIncomeSummary",
-        "getAlternativeHoldings",
         "getNetWorth"
       ],
-      "purpose": "Starting net worth and cash, FIFO lots, valuation history, income, property and debts for projections"
+      "purpose": "Starting net worth and cash, FIFO lots, valuation history and income for projections"
+    },
+    {
+      "category": "alternative-assets",
+      "functions": [
+        "getAll"
+      ],
+      "purpose": "Property and debts for projections"
     }
   ],
   "keywords": [

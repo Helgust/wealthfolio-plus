@@ -1,8 +1,9 @@
-// Addon API methods that exist only in our Wealthfolio fork.
-// The official build does not have them: callers check availability and work without them.
+// Addon API methods missing from the addon SDK 3.8.0 typings: getNetWorth exists only in our
+// Wealthfolio fork, alternativeAssets.getAll — in Wealthfolio 3.9+.
+// Builds without them: callers check availability and work without them.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 
-// Copy of AlternativeAssetHolding from the fork's packages/addon-sdk (fields the addon needs).
+// Copy of AlternativeAssetHolding from addon SDK 3.9 (fields the addon needs).
 export interface AlternativeAssetHolding {
   id: string;
   /** PROPERTY, VEHICLE, COLLECTIBLE, PRECIOUS_METAL, LIABILITY, OTHER (Rust AssetKind, SCREAMING_SNAKE_CASE) */
@@ -18,12 +19,12 @@ export interface AlternativeAssetHolding {
   linkedAssetId?: string;
 }
 
-type PortfolioWithAlternatives = AddonContext['api']['portfolio'] & {
-  getAlternativeHoldings: () => Promise<AlternativeAssetHolding[]>;
+type ApiWithAlternatives = AddonContext['api'] & {
+  alternativeAssets: { getAll: () => Promise<AlternativeAssetHolding[]> };
 };
 
 /**
- * null — method unavailable (official Wealthfolio build).
+ * null — method unavailable (Wealthfolio before 3.9).
  * Availability cannot be checked in advance: the sandbox API is a Proxy that has every property,
  * and the host rejects an unknown method only when it is called.
  */
@@ -31,9 +32,9 @@ export async function getAlternativeHoldings(
   ctx: AddonContext,
 ): Promise<AlternativeAssetHolding[] | null> {
   try {
-    return await (ctx.api.portfolio as PortfolioWithAlternatives).getAlternativeHoldings();
+    return await (ctx.api as ApiWithAlternatives).alternativeAssets.getAll();
   } catch (error) {
-    ctx.api.logger.warn(`getAlternativeHoldings unavailable: ${String(error)}`);
+    ctx.api.logger.warn(`alternativeAssets.getAll unavailable: ${String(error)}`);
     return null;
   }
 }

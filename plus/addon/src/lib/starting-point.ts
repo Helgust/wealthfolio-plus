@@ -1,5 +1,5 @@
 // Plan starting point from Wealthfolio: net worth as on the Net Worth page, accounts with
-// positions and lots, real estate and debts (fork only). The Spanish account type and the real
+// positions and lots, real estate and debts (Wealthfolio 3.9+). The Spanish account type and the real
 // estate settings are applied separately (buildStart) so changing them does not reload the portfolio.
 import type { AddonContext, Holding } from '@wealthfolio/addon-sdk';
 import { positionValue, type Account, type Position } from '../engine/portfolio';
@@ -27,7 +27,7 @@ export interface LoadedPortfolio {
   /** true — net worth from the fork's get_net_worth; false — sum of account valuations (official build) */
   exact: boolean;
   accounts: WfAccount[];
-  /** Alternative assets (real estate, debts, …); null — unavailable in the official build */
+  /** Alternative assets (real estate, debts, …); null — unavailable before Wealthfolio 3.9 */
   alternatives: AlternativeAssetHolding[] | null;
 }
 

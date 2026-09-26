@@ -34,7 +34,7 @@ import {
 import { NumberInput } from './form-fields';
 
 interface Props {
-  /** null — the official build: no alternative assets in the addon API */
+  /** null — Wealthfolio before 3.9: no alternative assets in the addon API */
   alternatives: AlternativeAssetHolding[] | null;
   settings: RealEstateSettings;
   people: string[];
@@ -47,8 +47,8 @@ export function RealEstateSettingsTable({ alternatives, settings, people, curren
   if (alternatives === null) {
     return (
       <p className="text-muted-foreground text-sm">
-        Real estate and debts need portfolio.getAlternativeHoldings, which only this Wealthfolio fork has. In the
-        official build they stay in net worth as they are.
+        Real estate and debts need alternativeAssets.getAll from Wealthfolio 3.9. In older versions they stay in
+        net worth as they are.
       </p>
     );
   }

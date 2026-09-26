@@ -89,10 +89,17 @@ describe('loadPortfolio', () => {
     expect(accountCost(s.accounts[1])).toBeCloseTo(100 + 810, 9);
   });
 
-  it('official build: no real estate (getAlternativeHoldings unavailable)', async () => {
+  it('Wealthfolio before 3.9: no real estate (alternativeAssets.getAll unavailable)', async () => {
     const p = await loadPortfolio(ctx);
     expect(p.alternatives).toBeNull();
     expect(buildStart(p, {}).properties).toEqual([]);
+  });
+
+  it('reads real estate and debts via alternativeAssets.getAll', async () => {
+    const home = { id: 'PROP-1', kind: 'PROPERTY', name: 'Home', currency: 'EUR', marketValue: '300000', valuationDate: '2026-09-01' };
+    const withAlternatives = { api: { ...ctx.api, alternativeAssets: { getAll: async () => [home] } } } as unknown as AddonContext;
+    const p = await loadPortfolio(withAlternatives);
+    expect(p.alternatives).toEqual([home]);
   });
 
   it('real estate: properties with a use, loans with a monthly payment', async () => {

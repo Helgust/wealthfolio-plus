@@ -65,7 +65,7 @@ function DataSection({ ctx }: { ctx: AddonContext }) {
       </ul>
       {data.alternatives === null ? (
         <p className="text-muted-foreground">
-          Alternative assets and debts: method unavailable — official build without the fork change.
+          Alternative assets and debts: method unavailable — Wealthfolio before 3.9.
         </p>
       ) : (
         <>
