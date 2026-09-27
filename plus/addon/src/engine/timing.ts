@@ -1,5 +1,5 @@
 // When plan events happen: timings resolve to years, milestones are reached year by year.
-import type { Milestone, Plan, Timing } from '../model/plan';
+import type { Milestone, OneTime, Plan, Timing } from '../model/plan';
 
 /** Year a timing falls on; null — not known (yet): a milestone not reached or a missing person. */
 export function timingYear(t: Timing, plan: Plan, reached: ReadonlyMap<string, number>): number | null {
@@ -28,6 +28,16 @@ export function isActive(
   if (s === null || year < s) return false;
   const e = end ? timingYear(end, plan, reached) : null;
   return e === null || year < e;
+}
+
+/** Whether a one-time event happens in year: in its year, then every `repeat.every` years before `repeat.until`. */
+export function occursIn(e: OneTime, year: number, plan: Plan, reached: ReadonlyMap<string, number>): boolean {
+  const at = timingYear(e.at, plan, reached);
+  if (at === null || year < at) return false;
+  if (year === at) return true;
+  if (!e.repeat || (year - at) % e.repeat.every !== 0) return false;
+  const until = e.repeat.until ? timingYear(e.repeat.until, plan, reached) : null;
+  return until === null || year < until;
 }
 
 /**

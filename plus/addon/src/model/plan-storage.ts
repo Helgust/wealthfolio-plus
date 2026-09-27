@@ -3,7 +3,7 @@
 // (key plan.v1) becomes the first plan on first load; its key is left in place.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { z } from 'zod';
-import { defaultPlan, PlanSchema, type Plan } from './plan';
+import { newPlan, PlanSchema, type Plan } from './plan';
 
 type Storage = AddonContext['api']['storage'];
 
@@ -37,16 +37,16 @@ export interface PlanBook {
 }
 
 export function parsePlan(json: string | null, startYear: number): LoadedPlan {
-  if (json === null) return { plan: defaultPlan(startYear), isDefault: true };
+  if (json === null) return { plan: newPlan(startYear), isDefault: true };
   let raw: unknown;
   try {
     raw = JSON.parse(json);
   } catch (e) {
-    return { plan: defaultPlan(startYear), isDefault: true, error: `Invalid JSON: ${String(e)}` };
+    return { plan: newPlan(startYear), isDefault: true, error: `Invalid JSON: ${String(e)}` };
   }
   const parsed = PlanSchema.safeParse(raw);
   if (!parsed.success) {
-    return { plan: defaultPlan(startYear), isDefault: true, error: parsed.error.message };
+    return { plan: newPlan(startYear), isDefault: true, error: parsed.error.message };
   }
   return { plan: parsed.data, isDefault: false };
 }

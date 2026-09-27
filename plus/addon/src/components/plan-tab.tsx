@@ -8,9 +8,23 @@ import type { Loan, Property } from '../engine/real-estate';
 import { withdrawalOrder, type PlanResult } from '../engine/run-plan';
 import { formatMoney, formatPercent } from '../lib/format';
 import { KIND_LABEL } from '../model/accounts';
-import type { Milestone, Plan } from '../model/plan';
+import {
+  autonomoGrowth,
+  isPrepay,
+  WITH_INFLATION,
+  type AutonomoIncome,
+  type Growth,
+  type Milestone,
+  type OneTime,
+  type Period,
+  type Plan,
+  type PropertyPurchase,
+} from '../model/plan';
 import { USE_LABEL } from '../model/properties';
-import { MODE_LABEL } from './investments-editor';
+import { amountLabel, growthLabel } from './amount-input';
+import { TAX_LABEL } from './income-editor';
+import { REDUCTION_LABEL, rentableHomes } from './real-estate-editor';
+import { EFFECT_LABEL, loanOptions, MODE_LABEL, PREPAY_MODE_LABEL } from './investments-editor';
 import type { EditorSection } from './plan-editor';
 import { spanLabel, timingLabel } from './timing-input';
 
@@ -49,11 +63,38 @@ function Line({ main, detail }: { main: ReactNode; detail: ReactNode }) {
 
 const Empty = ({ children }: { children: string }) => <p className="text-muted-foreground">{children}</p>;
 
+/** "at 3%", "at Euríbor + 1%", "at 2.5% for 10 years, then Euríbor + 1%". */
+function mortgageRate(m: NonNullable<PropertyPurchase['mortgage']>): string {
+  const v = m.variable;
+  if (!v) return `at ${formatPercent(m.rate)}`;
+  const variable = `Euríbor ${v.diferencial >= 0 ? '+' : '−'} ${formatPercent(Math.abs(v.diferencial))}`;
+  return v.fixedYears === 0 ? `at ${variable}` : `at ${formatPercent(m.rate)} for ${v.fixedYears} years, then ${variable}`;
+}
+
+/** A growth worth mentioning: anything but "with inflation". */
+const unusual = (g: Growth | undefined): g is Growth => !!g && (g.kind !== 'inflation' || g.real !== 0);
+
+/** "change: with inflation" or "revenue: inflation + 1%; expenses: fixed nominal". */
+function autonomoGrowthLabel(inc: AutonomoIncome, inflation: number): string {
+  const revenue = growthLabel(autonomoGrowth(inc, 'revenue', inflation));
+  const expenses = growthLabel(autonomoGrowth(inc, 'expenses', inflation));
+  return revenue === expenses ? `change: ${revenue}` : `revenue: ${revenue}; expenses: ${expenses}`;
+}
+
 export function PlanTab({ plan, result, accounts, properties, loans, currency, onEdit }: Props) {
   const years = result.milestoneYears;
   const money = (v: number) => formatMoney(v, currency);
+  const amount = (v: number, per: Period | undefined) => amountLabel(v, per, currency);
   const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? 'Missing account';
+  const loanName = (id: string) => loanOptions(plan, loans).find((l) => l.id === id)?.name ?? 'a missing loan';
   const sink = accounts.find((a) => a.kind === 'cash');
+
+  function oneTimeWhen(e: OneTime): string {
+    const at = timingLabel(e.at, plan, years);
+    if (!e.repeat) return at;
+    const until = e.repeat.until ? `, until ${timingLabel(e.repeat.until, plan, years)}` : '';
+    return `${at}, every ${e.repeat.every} years${until}`;
+  }
 
   function trigger(m: Milestone): string {
     const t = m.trigger;
@@ -81,7 +122,7 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
       </PlanCard>
 
       <PlanCard title="Income" onEdit={() => onEdit('household')}>
-        {plan.people.every((p) => !p.autonomo && !p.pension) && <Empty>No income.</Empty>}
+        {plan.people.every((p) => !p.autonomo && !p.pension) && plan.incomes.length === 0 && <Empty>No income.</Empty>}
         {plan.people.map((p, i) => (
           <div key={i} className="space-y-2">
             {p.autonomo && (
@@ -90,9 +131,10 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
                   <>
                     <span className="font-medium">{p.name} · autónomo</span>
                     <div className="text-muted-foreground text-xs">
-                      revenue {money(p.autonomo.revenue)}, expenses {money(p.autonomo.expenses)}, growth{' '}
-                      {formatPercent(p.autonomo.growth)}
+                      revenue {amount(p.autonomo.revenue, p.autonomo.per)}, expenses{' '}
+                      {amount(p.autonomo.expenses, p.autonomo.per)}
                     </div>
+                    <div className="text-muted-foreground text-xs">{autonomoGrowthLabel(p.autonomo, plan.inflation)}</div>
                   </>
                 }
                 detail={spanLabel(p.autonomo.start, p.autonomo.end, plan, years)}
@@ -103,13 +145,34 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
                 main={
                   <>
                     <span className="font-medium">{p.name} · Seguridad Social pension</span>
-                    <div className="text-muted-foreground text-xs">{money(p.pension.amount)} gross, grows with inflation</div>
+                    <div className="text-muted-foreground text-xs">
+                      {amount(p.pension.amount, p.pension.per)} gross, {growthLabel(p.pension.growth ?? WITH_INFLATION)}
+                    </div>
                   </>
                 }
                 detail={`from ${timingLabel(p.pension.start, plan, years)}`}
               />
             )}
           </div>
+        ))}
+        {plan.incomes.map((inc, i) => (
+          <Line
+            key={`income${i}`}
+            main={
+              <>
+                <span className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {plan.people.length > 1 ? `${plan.people[inc.person]?.name ?? 'Missing person'} · ` : ''}
+                    {inc.name}
+                  </span>
+                  <Badge variant="outline">{TAX_LABEL[inc.tax]}</Badge>
+                  <span className="tabular-nums">{amount(inc.amount, inc.per)}</span>
+                </span>
+                {unusual(inc.growth) && <div className="text-muted-foreground text-xs">{growthLabel(inc.growth)}</div>}
+              </>
+            }
+            detail={spanLabel(inc.start, inc.end, plan, years)}
+          />
         ))}
       </PlanCard>
 
@@ -134,7 +197,8 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
               <span className="flex items-center gap-2">
                 <span className="font-medium">{e.name}</span>
                 <Badge variant="outline">{e.kind}</Badge>
-                <span className="tabular-nums">{money(e.amount)}</span>
+                <span className="tabular-nums">{amount(e.amount, e.per)}</span>
+                {unusual(e.growth) && <span className="text-muted-foreground text-xs">{growthLabel(e.growth)}</span>}
               </span>
             }
             detail={spanLabel(e.start, e.end, plan, years)}
@@ -142,21 +206,56 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
         ))}
       </PlanCard>
 
-      <PlanCard title="Cash-flow priorities" onEdit={() => onEdit('investments')}>
-        <div className="text-muted-foreground text-xs">Surplus, in order</div>
-        {plan.flows.map((f, i) => (
+      <PlanCard title="One-time events" onEdit={() => onEdit('oneTime')}>
+        {plan.oneTime.length === 0 && <Empty>No one-time events: a car, a renovation, an inheritance.</Empty>}
+        {plan.oneTime.map((e, i) => (
           <Line
             key={i}
-            main={`${i + 1}. ${accountName(f.accountId)}`}
-            detail={
-              f.mode === 'max'
-                ? MODE_LABEL.max
-                : f.mode === 'percent'
-                  ? `${formatPercent(f.amount)} of the rest`
-                  : `${MODE_LABEL[f.mode]}: ${money(f.amount)}`
+            main={
+              <span className="flex items-center gap-2">
+                <span className="font-medium">{e.name}</span>
+                <Badge variant="outline">{e.type === 'expense' ? e.kind : TAX_LABEL[e.tax]}</Badge>
+                <span className="tabular-nums">
+                  {e.type === 'income' ? '+' : '−'}
+                  {money(e.amount)}
+                </span>
+                {e.nominal && <span className="text-muted-foreground text-xs">nominal</span>}
+              </span>
             }
+            detail={oneTimeWhen(e)}
           />
         ))}
+      </PlanCard>
+
+      <PlanCard title="Cash-flow priorities" onEdit={() => onEdit('investments')}>
+        <div className="text-muted-foreground text-xs">Surplus, in order</div>
+        {plan.flows.map((f, i) =>
+          isPrepay(f) ? (
+            <Line
+              key={i}
+              main={`${i + 1}. Prepay ${loanName(f.loanId)}`}
+              detail={`${
+                f.mode === 'max'
+                  ? PREPAY_MODE_LABEL.max
+                  : f.mode === 'percent'
+                    ? `${formatPercent(f.amount)} of the rest`
+                    : `${money(f.amount)} a year`
+              } · ${EFFECT_LABEL[f.effect].toLowerCase()}${f.until ? ` · until ${timingLabel(f.until, plan, years)}` : ''}`}
+            />
+          ) : (
+            <Line
+              key={i}
+              main={`${i + 1}. ${accountName(f.accountId)}`}
+              detail={
+                f.mode === 'max'
+                  ? MODE_LABEL.max
+                  : f.mode === 'percent'
+                    ? `${formatPercent(f.amount)} of the rest`
+                    : `${MODE_LABEL[f.mode]}: ${money(f.amount)}`
+              }
+            />
+          ),
+        )}
         <Line main={`${plan.flows.length + 1}. ${sink?.name ?? 'Cash'}`} detail="the rest" />
         <div className="text-muted-foreground pt-2 text-xs">Shortfalls, in order</div>
         <div>
@@ -168,7 +267,7 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
       </PlanCard>
 
       <PlanCard title="Real estate" onEdit={() => onEdit('realEstate')}>
-        {properties.length + loans.length + plan.propertyPurchases.length === 0 && (
+        {properties.length + loans.length + plan.propertyPurchases.length + plan.rentals.length === 0 && (
           <Empty>No modelled real estate. Set a use for Wealthfolio properties on the Accounts tab, or plan a purchase.</Empty>
         )}
         {properties.map((p) => (
@@ -187,7 +286,11 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
           <Line
             key={l.id}
             main={<span className="font-medium">{l.name}</span>}
-            detail={`${money(l.balance)} owed · ${money(l.monthlyPayment)} a month · ${formatPercent(l.rate)}`}
+            detail={`${money(l.balance)} owed · ${money(l.monthlyPayment)} a month · ${formatPercent(l.rate)}${
+              l.variable
+                ? `, then Euríbor ${l.variable.diferencial >= 0 ? '+' : '−'} ${formatPercent(Math.abs(l.variable.diferencial))}`
+                : ''
+            }`}
           />
         ))}
         {plan.propertySales.map((s, i) => (
@@ -197,10 +300,23 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
             detail={timingLabel(s.timing, plan, years)}
           />
         ))}
+        {plan.rentals.map((r, i) => (
+          <Line
+            key={`rental${i}`}
+            main={
+              <span>
+                Let {rentableHomes(plan, properties).find((h) => h.id === r.propertyId)?.name ?? 'a missing home'} ·{' '}
+                {amountLabel(r.amount, r.per, currency)}
+                {r.occupancy < 1 ? `, ${formatPercent(r.occupancy)} of the year` : ''}
+              </span>
+            }
+            detail={`${spanLabel(r.start, r.end, plan, years)} · reducción ${REDUCTION_LABEL[r.reduction]}`}
+          />
+        ))}
         {plan.propertyPurchases.map((p) => (
           <Line
             key={p.id}
-            main={`Buy ${p.name} · ${money(p.price)}${p.mortgage ? `, mortgage ${money(p.mortgage.amount)}` : ''}`}
+            main={`Buy ${p.name} · ${money(p.price)}${p.mortgage ? `, mortgage ${money(p.mortgage.amount)} ${mortgageRate(p.mortgage)}` : ''}`}
             detail={`${timingLabel(p.timing, plan, years)} · ${p.newBuild ? 'new' : 'second-hand'}${p.habitual ? ', vivienda habitual' : ''}`}
           />
         ))}

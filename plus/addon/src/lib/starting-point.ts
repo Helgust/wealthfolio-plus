@@ -3,7 +3,7 @@
 // estate settings are applied separately (buildStart) so changing them does not reload the portfolio.
 import type { AddonContext, Holding } from '@wealthfolio/addon-sdk';
 import { positionValue, type Account, type Position } from '../engine/portfolio';
-import type { Loan, Property } from '../engine/real-estate';
+import { annuityPayment, type Loan, type Property } from '../engine/real-estate';
 import type { StartingPoint } from '../engine/run-plan';
 import { defaultSetting, type AccountSetting, type AccountSettings } from '../model/accounts';
 import { defaultPropertySetting, type PropertySetting, type RealEstateSettings } from '../model/properties';
@@ -122,7 +122,7 @@ export async function loadPortfolio(ctx: AddonContext): Promise<LoadedPortfolio>
 
 /**
  * Engine starting point: accounts with a Spanish type, properties with a use, loans with a monthly
- * payment. Everything else stays in net worth as is.
+ * payment or the years left. Everything else stays in net worth as is.
  */
 export function buildStart(
   portfolio: LoadedPortfolio,
@@ -147,20 +147,28 @@ export function buildStart(
         catastroRevisado: s.catastroRevisado,
         ibi: s.ibi,
         acquisitionValue: price + s.acquisitionCosts,
+        ...(s.community ? { community: s.community } : {}),
+        ...(s.insurance ? { insurance: s.insurance } : {}),
+        ...(s.constructionShare ? { constructionShare: s.constructionShare } : {}),
       },
     ];
   });
   const loans = alternatives.filter(isLiability).flatMap((h): Loan[] => {
-    const payment = realEstate.loans[h.id]?.monthlyPayment ?? 0;
+    const s = realEstate.loans[h.id];
+    const balance = Math.abs(Number(h.marketValue));
+    const rate = liabilityRate(h);
+    const payment = s?.years ? annuityPayment(balance, rate, s.years) : (s?.monthlyPayment ?? 0);
     if (payment <= 0) return [];
+    const v = s?.variable;
     return [
       {
         id: h.id,
         name: h.name,
-        balance: Math.abs(Number(h.marketValue)),
-        rate: liabilityRate(h),
+        balance,
+        rate,
         monthlyPayment: payment,
         propertyId: linkedProperty(h),
+        ...(v ? { variable: { diferencial: v.diferencial, fromYear: v.variableFrom } } : {}),
       },
     ];
   });

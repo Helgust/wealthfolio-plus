@@ -107,8 +107,12 @@ export function milestoneUses(plan: Plan, m: Milestone): string[] {
     if (p.pension && at(p.pension.start)) uses.push(`${p.name}'s pension`);
   });
   plan.expenses.forEach((e) => (at(e.start) || at(e.end)) && uses.push(e.name));
+  plan.incomes.forEach((x) => (at(x.start) || at(x.end)) && uses.push(x.name));
+  plan.oneTime.forEach((x) => (at(x.at) || at(x.repeat?.until ?? null)) && uses.push(x.name));
   if (plan.spending.kind !== 'planned' && at(plan.spending.start)) uses.push('the spending rule');
   if (plan.propertySales.some((s) => at(s.timing))) uses.push('a property sale');
   plan.propertyPurchases.forEach((p) => at(p.timing) && uses.push(p.name));
+  if (plan.rentals.some((r) => at(r.start) || at(r.end))) uses.push('a rental');
+  plan.flows.forEach((f) => 'loanId' in f && at(f.until) && uses.push('a loan prepayment'));
   return uses;
 }

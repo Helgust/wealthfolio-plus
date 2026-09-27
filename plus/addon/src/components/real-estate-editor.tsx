@@ -1,4 +1,4 @@
-// Plan editor section: sales of Wealthfolio properties and purchases of homes.
+// Plan editor section: sales of Wealthfolio properties, purchases of homes and rentals.
 import {
   Button,
   Input,
@@ -12,8 +12,11 @@ import {
 } from '@wealthfolio/ui';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Property } from '../engine/real-estate';
+import { rulesForYear } from '../es-tax';
+import { formatPercent } from '../lib/format';
 import type { Owner } from '../model/accounts';
-import type { Plan, PropertyPurchase, PropertySale } from '../model/plan';
+import { WITH_INFLATION, type Plan, type PropertyPurchase, type PropertySale, type Rental } from '../model/plan';
+import { AmountInput, GrowthInput } from './amount-input';
 import { Field, NumberInput, PercentInput } from './form-fields';
 import { TimingInput } from './timing-input';
 
@@ -22,6 +25,34 @@ interface Props {
   set: (patch: Partial<Plan>) => void;
   /** Modelled properties from Wealthfolio — the ones that can be sold */
   properties: Property[];
+}
+
+export const REDUCTION_LABEL: Record<Rental['reduction'], string> = {
+  general: 'general',
+  rehabilitacion: 'rehabilitated in the 2 years before',
+  joven_o_social: 'tenant 18–35 in a zona tensionada, or social rent',
+  rebaja_tensionada: 'zona tensionada, rent cut by more than 5 %',
+  anterior_2023: 'contract before 26.05.2023',
+};
+
+/** Homes a plan can let: modelled Wealthfolio properties and the plan's purchases. */
+export function rentableHomes(plan: Plan, properties: Property[]): { id: string; name: string }[] {
+  return [
+    ...properties.map((p) => ({ id: p.id, name: p.name })),
+    ...plan.propertyPurchases.map((p) => ({ id: `purchase:${p.id}`, name: p.name })),
+  ];
+}
+
+type Mortgage = NonNullable<PropertyPurchase['mortgage']>;
+type RateType = 'fixed' | 'variable' | 'mixed';
+
+const rateTypeOf = (m: Mortgage): RateType => (!m.variable ? 'fixed' : m.variable.fixedYears === 0 ? 'variable' : 'mixed');
+
+function withRateType(m: Mortgage, t: RateType): Mortgage {
+  const { variable, ...fixed } = m;
+  if (t === 'fixed') return fixed;
+  const diferencial = variable?.diferencial ?? 0.01;
+  return { ...fixed, variable: { diferencial, fixedYears: t === 'variable' ? 0 : variable?.fixedYears || 10 } };
 }
 
 const newPurchase = (plan: Plan): PropertyPurchase => ({
@@ -41,6 +72,10 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
     set({ propertySales: draft.propertySales.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const setPurchase = (i: number, patch: Partial<PropertyPurchase>) =>
     set({ propertyPurchases: draft.propertyPurchases.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const setRental = (i: number, patch: Partial<Rental>) =>
+    set({ rentals: draft.rentals.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  const homes = rentableHomes(draft, properties);
+  const reduccion = rulesForYear(draft.startYear).inmuebles.arrendamiento.reduccion;
 
   return (
     <div className="space-y-6">
@@ -176,6 +211,17 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
                 <Label className="text-sm">Mortgage</Label>
               </div>
             </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Comunidad a year">
+                <NumberInput value={p.community ?? 0} step={50} onChange={(v) => setPurchase(i, { community: v ?? 0 })} />
+              </Field>
+              <Field label="Insurance a year">
+                <NumberInput value={p.insurance ?? 0} step={50} onChange={(v) => setPurchase(i, { insurance: v ?? 0 })} />
+              </Field>
+              <Field label="Building share, % (if let)">
+                <PercentInput value={p.constructionShare ?? 0} onChange={(v) => setPurchase(i, { constructionShare: v })} />
+              </Field>
+            </div>
             {p.mortgage && (
               <div className="grid grid-cols-3 gap-2">
                 <Field label="Amount">
@@ -185,18 +231,57 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
                     onChange={(v) => setPurchase(i, { mortgage: { ...p.mortgage!, amount: v ?? 0 } })}
                   />
                 </Field>
-                <Field label="Rate, %">
-                  <PercentInput
-                    value={p.mortgage.rate}
-                    onChange={(v) => setPurchase(i, { mortgage: { ...p.mortgage!, rate: v } })}
-                  />
-                </Field>
                 <Field label="Years">
                   <NumberInput
                     value={p.mortgage.years}
                     onChange={(v) => setPurchase(i, { mortgage: { ...p.mortgage!, years: v ?? 1 } })}
                   />
                 </Field>
+                <Field label="Rate type">
+                  <Select
+                    value={rateTypeOf(p.mortgage)}
+                    onValueChange={(v) => setPurchase(i, { mortgage: withRateType(p.mortgage!, v as RateType) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">Fixed</SelectItem>
+                      <SelectItem value="variable">Variable</SelectItem>
+                      <SelectItem value="mixed">Mixed (mixta)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {rateTypeOf(p.mortgage) !== 'variable' && (
+                  <Field label={rateTypeOf(p.mortgage) === 'mixed' ? 'Fixed rate, %' : 'Rate, %'}>
+                    <PercentInput
+                      value={p.mortgage.rate}
+                      onChange={(v) => setPurchase(i, { mortgage: { ...p.mortgage!, rate: v } })}
+                    />
+                  </Field>
+                )}
+                {p.mortgage.variable && rateTypeOf(p.mortgage) === 'mixed' && (
+                  <Field label="Fixed for, years">
+                    <NumberInput
+                      value={p.mortgage.variable.fixedYears}
+                      onChange={(v) =>
+                        setPurchase(i, {
+                          mortgage: { ...p.mortgage!, variable: { ...p.mortgage!.variable!, fixedYears: Math.max(v ?? 1, 1) } },
+                        })
+                      }
+                    />
+                  </Field>
+                )}
+                {p.mortgage.variable && (
+                  <Field label="Euríbor + diferencial, %">
+                    <PercentInput
+                      value={p.mortgage.variable.diferencial}
+                      onChange={(v) =>
+                        setPurchase(i, { mortgage: { ...p.mortgage!, variable: { ...p.mortgage!.variable!, diferencial: v } } })
+                      }
+                    />
+                  </Field>
+                )}
               </div>
             )}
           </div>
@@ -208,6 +293,103 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
           onClick={() => set({ propertyPurchases: [...draft.propertyPurchases, newPurchase(draft)] })}
         >
           <Plus className="h-4 w-4" /> Add purchase
+        </Button>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="font-medium">Rentals</h3>
+        <p className="text-muted-foreground text-xs">
+          While let, a home imputes no rent: its rendimiento — rent less interest and repairs (together up to the rent,
+          the excess carries over four years), IBI, comunidad, insurance and 3 % amortización of the building — goes to
+          the owners' base general, reduced by art. 23.2 LIRPF when positive. A home let before its sale stays the
+          vivienda habitual for the exemptions if sold the next year at the latest.
+        </p>
+        {draft.rentals.map((r, i) => (
+          <div key={i} className="grid grid-cols-2 items-end gap-2 rounded-md border p-3">
+            <Field label="Home">
+              <Select value={r.propertyId} onValueChange={(v) => setRental(i, { propertyId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Home" />
+                </SelectTrigger>
+                <SelectContent>
+                  {homes.map((h) => (
+                    <SelectItem key={h.id} value={h.id}>
+                      {h.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <Field label="Reducción (art. 23.2)">
+                  <Select value={r.reduction} onValueChange={(v) => setRental(i, { reduction: v as Rental['reduction'] })}>
+                    <SelectTrigger style={{ minWidth: 0 }}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(REDUCTION_LABEL) as Rental['reduction'][]).map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {formatPercent(reduccion[k])} — {REDUCTION_LABEL[k]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Remove rental"
+                onClick={() => set({ rentals: draft.rentals.filter((_, j) => j !== i) })}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            <Field label="Rent">
+              <AmountInput value={r.amount} per={r.per} step={50} onChange={(amount, per) => setRental(i, { amount, per })} />
+            </Field>
+            <Field label="Change per year, %">
+              <GrowthInput value={r.growth ?? WITH_INFLATION} onChange={(growth) => setRental(i, { growth })} />
+            </Field>
+            <Field label="Let, % of the year">
+              <PercentInput value={r.occupancy} onChange={(occupancy) => setRental(i, { occupancy })} />
+            </Field>
+            <Field label="Repairs a year">
+              <NumberInput value={r.repairs} step={100} onChange={(v) => setRental(i, { repairs: v ?? 0 })} />
+            </Field>
+            <Field label="Starts">
+              <TimingInput value={r.start} plan={draft} noneLabel="Plan start" onChange={(t) => setRental(i, { start: t })} />
+            </Field>
+            <Field label="Stops">
+              <TimingInput value={r.end} plan={draft} noneLabel="Never" onChange={(t) => setRental(i, { end: t })} />
+            </Field>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={homes.length === 0 || draft.rentals.length >= 10}
+          onClick={() =>
+            set({
+              rentals: [
+                ...draft.rentals,
+                {
+                  propertyId: homes[0].id,
+                  amount: 0,
+                  per: 'month',
+                  growth: WITH_INFLATION,
+                  occupancy: 1,
+                  repairs: 0,
+                  reduction: 'general',
+                  start: null,
+                  end: null,
+                },
+              ],
+            })
+          }
+        >
+          <Plus className="h-4 w-4" /> Add rental
         </Button>
       </section>
     </div>

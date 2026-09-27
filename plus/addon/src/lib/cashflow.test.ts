@@ -17,6 +17,7 @@ function expectBalanced(rows: LedgerRow[], start: StartingPoint) {
     // Net worth change = deposits − withdrawals − shortfall + market growth, plus what real estate
     // and loans changed outside cash: appreciation, homes bought and sold, debt paid and taken.
     const before = i === 0 ? start.netWorth : rows[i - 1].netWorth;
+    const owedBefore = i === 0 ? 0 : rows[i - 1].taxOwed;
     const re = r.realEstate;
     const explained =
       totalOf(r.deposits) -
@@ -27,8 +28,10 @@ function expectBalanced(rows: LedgerRow[], start: StartingPoint) {
       re.purchaseCost -
       re.saleValue +
       re.loanPrincipal +
+      re.loanPrepaid +
       re.loanRepaidAtSale -
-      re.newLoans;
+      re.newLoans -
+      (r.taxOwed - owedBefore);
     expect(r.netWorth - before).toBeCloseTo(explained, 4);
   });
 }
@@ -176,6 +179,132 @@ describe('cash flow of a year', () => {
     const rows = runPlan(p, start).rows;
     expect(rows[0].shortfall).toBeGreaterThan(0);
     expect(rows.at(-1)!.cash).toBeLessThan(0);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up with salaries, gains, tax-free income and one-time events', () => {
+    const start: StartingPoint = {
+      netWorth: 60_000,
+      accounts: [cashAccount(20_000), investAccount('ppi', 'ppi', 1, 40_000, 40_000, 1)],
+    };
+    const d = defaultPlan(2026);
+    const p: Plan = {
+      ...d,
+      returns: RETURNS,
+      filing: 'joint',
+      people: [
+        { ...d.people[0], autonomo: { ...d.people[0].autonomo!, end: { kind: 'year', year: 2032 } } },
+        { name: 'P', birthYear: 1990, disability: 'ninguna', autonomo: null, pension: null },
+      ],
+      incomes: [
+        { name: 'Job', person: 1, tax: 'trabajo', amount: 2_500, per: 'month', start: null, end: { kind: 'age', person: 1, age: 65 } },
+        { name: 'New job', person: 0, tax: 'trabajo', amount: 45_000, start: { kind: 'year', year: 2032 }, end: { kind: 'milestone', id: 'retirement' } },
+        { name: 'Crypto', person: 0, tax: 'ganancia', amount: 2_000, start: null, end: { kind: 'year', year: 2030 } },
+      ],
+      oneTime: [
+        { type: 'income', name: 'Herencia', person: 1, tax: 'exento', amount: 80_000, nominal: true, at: { kind: 'year', year: 2040 }, repeat: null },
+        { type: 'expense', name: 'Car', kind: 'essential', amount: 25_000, nominal: false, at: { kind: 'year', year: 2029 }, repeat: { every: 8, until: null } },
+      ],
+      flows: [{ accountId: 'ppi', mode: 'max', amount: 0 }],
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows[0].wages).toBe(30_000);
+    expect(rows[0].employeeContributions).toBeGreaterThan(0);
+    expect(rows.find((r) => r.year === 2040)!.exemptIncome).toBe(80_000);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up with loan prepayments and a variable-rate mortgage', () => {
+    const start: StartingPoint = {
+      netWorth: 50_000 - 120_000,
+      accounts: [cashAccount(50_000)],
+      loans: [
+        { id: 'm', name: 'M', balance: 120_000, rate: 0.03, monthlyPayment: 700, propertyId: null, variable: { diferencial: 0.01, fromYear: null } },
+      ],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      euribor: 0.03,
+      expenses: [{ name: 'Living', amount: 10_000, kind: 'essential', start: null, end: null }],
+      flows: [
+        { loanId: 'm', mode: 'percent', amount: 0.5, effect: 'payment', until: { kind: 'year', year: 2035 }, fee: 0.0025 },
+        { loanId: 'm', mode: 'max', amount: 0, effect: 'term', until: null, fee: 0.0015 },
+      ],
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows[0].realEstate.loanPrepaid).toBeGreaterThan(0);
+    expect(rows[0].realEstate.prepaymentFees).toBeGreaterThan(0);
+    expect(rows.at(-1)!.loanBalance).toBe(0);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up with a flat bought with a mortgage and let, and a let home sold', () => {
+    const home = {
+      id: 'home',
+      name: 'Home',
+      value: 300_000,
+      use: 'habitual' as const,
+      owner: 'joint' as const,
+      valorCatastral: 90_000,
+      catastroRevisado: false,
+      ibi: 700,
+      acquisitionValue: 120_000,
+      community: 900,
+      insurance: 250,
+      constructionShare: 0.55,
+    };
+    const start: StartingPoint = { netWorth: 80_000 + 300_000, accounts: [cashAccount(80_000)], properties: [home] };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      propertyPurchases: [
+        {
+          id: 'flat',
+          name: 'Flat',
+          timing: { kind: 'year', year: 2028 },
+          price: 180_000,
+          newBuild: false,
+          habitual: false,
+          owner: 0,
+          ibi: 400,
+          community: 500,
+          insurance: 150,
+          constructionShare: 0.6,
+          mortgage: { amount: 140_000, rate: 0.03, years: 25, variable: { diferencial: 0.008, fixedYears: 5 } },
+        },
+      ],
+      rentals: [
+        { propertyId: 'purchase:flat', amount: 850, per: 'month', occupancy: 0.9, repairs: 400, reduction: 'general', start: null, end: null },
+        { propertyId: 'home', amount: 1_200, per: 'month', growth: { kind: 'nominal', rate: 0 }, occupancy: 1, repairs: 800, reduction: 'joven_o_social', start: { kind: 'year', year: 2040 }, end: null },
+      ],
+      propertySales: [{ propertyId: 'home', timing: { kind: 'year', year: 2045 }, costs: 0.06 }],
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows.find((r) => r.year === 2029)!.realEstate.rent).toBeGreaterThan(0);
+    expect(rows.find((r) => r.year === 2045)!.realEstate.gains.some((g) => g > 0)).toBe(true);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up with IRPF paid the next year, a refund and a sale', () => {
+    const start: StartingPoint = {
+      netWorth: 70_000,
+      accounts: [cashAccount(20_000), investAccount('broker', 'brokerage', 20, 2_500, 30_000)],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      taxPayment: 'nextYear',
+      priorYearTax: -1_200,
+      incomes: [{ name: 'Job', person: 0, tax: 'trabajo', amount: 12_000, start: null, end: { kind: 'year', year: 2035 } }],
+      oneTime: [
+        { type: 'expense', name: 'Roof', kind: 'essential', amount: 60_000, nominal: false, at: { kind: 'year', year: 2030 }, repeat: null },
+      ],
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows[0].irpfRefund).toBe(1_200);
+    expect(rows.some((r) => r.taxOwed > 0)).toBe(true);
+    expect(rows.some((r) => r.realizedGains !== 0)).toBe(true);
     expectBalanced(rows, start);
   });
 

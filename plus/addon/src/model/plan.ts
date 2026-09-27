@@ -1,9 +1,10 @@
 // Plan model: household, autónomo income, expenses; since phase 2 — account returns, surplus
 // flows and withdrawal order; since phase 3 — milestones, event timing, public pension; since
-// phase 4 — equity shares and Monte Carlo settings. The Zod
+// phase 4 — equity shares and Monte Carlo settings; since phase 5 — the period and the change over
+// time of event amounts, other incomes and one-time events. The Zod
 // schema validates the plan read from storage: old or broken JSON must not silently turn into
-// zeros. New fields have defaults and old ones are upgraded (upgradeLegacy), so plans of earlier
-// phases load without migration.
+// zeros. New fields have defaults or are optional, and old ones are upgraded (upgradeLegacy), so
+// plans of earlier phases load without migration.
 import { z } from 'zod';
 import { OwnerSchema } from './accounts';
 
@@ -39,16 +40,43 @@ export const MilestoneSchema = z.object({
   ]),
 });
 
+/**
+ * The period an amount is entered for. The plan keeps it, so the editor shows the amount as
+ * entered; the engine turns it into an amount per year.
+ */
+export const PeriodSchema = z.enum(['year', 'quarter', 'month']);
+
+export const PERIODS_PER_YEAR: Record<Period, number> = { year: 1, quarter: 4, month: 12 };
+
+/**
+ * How an amount changes over time from the plan's first year. inflation — follows each year's
+ * inflation plus a real growth (real 0 — constant in first-year euros); nominal — a constant
+ * nominal growth whatever the inflation (rate 0 — a fixed nominal amount: a rent by contract, a
+ * subscription).
+ */
+export const GrowthSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inflation'), real: rate }),
+  z.object({ kind: z.literal('nominal'), rate }),
+]);
+
+/** Grows with inflation: constant in first-year euros. Amounts without a growth change so. */
+export const WITH_INFLATION: Growth = { kind: 'inflation', real: 0 };
+
 export const AutonomoIncomeSchema = z.object({
-  /** Facturación in the plan's first year, € per year */
+  /** Facturación per period in first-year prices */
   revenue: money,
-  /** Deductible business expenses excluding the RETA cuota, € per year */
+  /** Deductible business expenses excluding the RETA cuota, per period in first-year prices */
   expenses: money,
+  /** Period of revenue and expenses; absent — per year */
+  per: PeriodSchema.optional(),
   /**
-   * Nominal growth of revenue and expenses per year, from the plan's first year, at the plan's
-   * inflation; in years with other inflation (Monte Carlo) they keep the same real growth
+   * Phases 1–4: nominal growth of revenue and expenses per year at the plan's inflation; in
+   * years with other inflation (Monte Carlo) they keep the same real growth. Revenue and expenses
+   * without their own growth change so (autonomoGrowth).
    */
   growth: rate,
+  revenueGrowth: GrowthSchema.optional(),
+  expensesGrowth: GrowthSchema.optional(),
   /** null — from the plan's first year */
   start: TimingSchema.nullable(),
   /** null — until the end of the plan */
@@ -57,13 +85,60 @@ export const AutonomoIncomeSchema = z.object({
 
 /**
  * Seguridad Social pension: an input amount (from the SS report), not computed. Grows with
- * inflation (revalorización by IPC); taxed as rendimientos del trabajo.
+ * inflation by default (revalorización by IPC); taxed as rendimientos del trabajo.
  */
 export const PublicPensionSchema = z.object({
-  /** Gross € per year in first-year prices */
+  /** Gross per period in first-year prices */
   amount: money,
+  /** Absent — per year */
+  per: PeriodSchema.optional(),
+  /** Absent — with inflation */
+  growth: GrowthSchema.optional(),
   start: TimingSchema,
 });
+
+/**
+ * How an income is taxed. trabajo — a salary (nómina): the salario bruto from the contract, a
+ * rendimiento del trabajo after the employee's cotizaciones; ganancia — a gain in the savings base
+ * (enter the gain, not the proceeds); exento — not in IRPF (herencia, donación: Sucesiones y
+ * Donaciones is not modelled).
+ */
+export const IncomeTaxSchema = z.enum(['trabajo', 'ganancia', 'exento']);
+
+/** A recurring income of a person besides the autónomo activity and the SS pension. */
+export const IncomeSchema = z.object({
+  name: z.string().min(1).max(60),
+  person,
+  tax: IncomeTaxSchema,
+  /** Per period in first-year prices */
+  amount: money,
+  /** Absent — per year */
+  per: PeriodSchema.optional(),
+  /** Absent — with inflation */
+  growth: GrowthSchema.optional(),
+  /** null — from the plan's first year */
+  start: TimingSchema.nullable(),
+  /** null — until the end of the plan */
+  end: TimingSchema.nullable(),
+});
+
+const oneTimeFields = {
+  name: z.string().min(1).max(60),
+  amount: money,
+  /** The amount is in nominal euros of the year it happens; otherwise in first-year prices */
+  nominal: z.boolean(),
+  at: TimingSchema,
+  /** Again every `every` years from `at`, up to (not including) `until`; null — once */
+  repeat: z
+    .object({ every: z.number().int().min(1).max(50), until: TimingSchema.nullable() })
+    .nullable(),
+};
+
+/** An expense or an income that happens in one year, maybe again every few years (a car, a renovation). */
+export const OneTimeSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('expense'), ...oneTimeFields, kind: z.enum(['essential', 'discretionary']) }),
+  z.object({ type: z.literal('income'), ...oneTimeFields, person, tax: IncomeTaxSchema }),
+]);
 
 export const PersonSchema = z.object({
   name: z.string().min(1).max(60),
@@ -79,8 +154,12 @@ export const ChildSchema = z.object({
 
 export const ExpenseSchema = z.object({
   name: z.string().min(1).max(60),
-  /** € per year in first-year prices; grows with inflation */
+  /** Per period in first-year prices */
   amount: money,
+  /** Absent — per year */
+  per: PeriodSchema.optional(),
+  /** Absent — with inflation */
+  growth: GrowthSchema.optional(),
   kind: z.enum(['essential', 'discretionary']),
   /** null — from the plan's first year */
   start: TimingSchema.nullable(),
@@ -167,14 +246,52 @@ export const PropertyPurchaseSchema = z.object({
   owner: OwnerSchema,
   /** IBI per year from the next year, first-year prices */
   ibi: money,
+  /** Comunidad and insurance per year from the next year, first-year prices */
+  community: money.optional(),
+  insurance: money.optional(),
+  /** Share of the building in the value, without the land: for the amortización of a rental */
+  constructionShare: share.optional(),
   mortgage: z
     .object({
       /** First-year prices */
       amount: money,
+      /** The fixed rate; of a mixed mortgage — for its fixed years */
       rate: z.number().finite().min(0).max(0.2),
       years: z.number().int().min(1).max(40),
+      /**
+       * Absent — fixed. Otherwise Euríbor + diferencial, revised once a year: from the start
+       * (fixedYears 0, variable) or after fixedYears at the fixed rate (mixta).
+       */
+      variable: z
+        .object({ diferencial: rate, fixedYears: z.number().int().min(0).max(30) })
+        .optional(),
     })
     .nullable(),
+});
+
+/**
+ * Letting a home out: a Wealthfolio property or one bought in the plan. While it is active the home
+ * is rented: no imputación de rentas, and its rendimiento del capital inmobiliario (arts. 22–23
+ * LIRPF) goes to the owners' base general. The reducción of art. 23.2 depends on the contract.
+ */
+export const RentalSchema = z.object({
+  /** A Wealthfolio property id or purchase:<purchase id> */
+  propertyId: z.string().min(1),
+  /** Rent per period in first-year prices */
+  amount: money,
+  /** Absent — per year */
+  per: PeriodSchema.optional(),
+  /** Absent — with inflation */
+  growth: GrowthSchema.optional(),
+  /** Share of the year the home is let */
+  occupancy: share,
+  /** Repairs and maintenance per year in first-year prices */
+  repairs: money,
+  reduction: z.enum(['general', 'rehabilitacion', 'joven_o_social', 'rebaja_tensionada', 'anterior_2023']),
+  /** null — from the plan's first year (or once the home is bought) */
+  start: TimingSchema.nullable(),
+  /** null — until the end of the plan (or the sale) */
+  end: TimingSchema.nullable(),
 });
 
 /**
@@ -183,11 +300,31 @@ export const PropertyPurchaseSchema = z.object({
  * untilBalance — top up to a balance. fixed and untilBalance amounts are in first-year prices.
  * What is left after the flows goes to the first CASH account.
  */
-export const FlowSchema = z.object({
+export const AccountFlowSchema = z.object({
   accountId: z.string().min(1),
   mode: z.enum(['max', 'fixed', 'percent', 'untilBalance']),
   amount: money,
 });
+
+/**
+ * Amortización anticipada of a loan from the surplus: max — the whole rest until the loan is repaid;
+ * fixed — amount per year in first-year prices; percent — share of the rest (amount 0…1). The fee is
+ * paid on top of the amount prepaid. term — reducir plazo: the payment stays, the loan ends sooner;
+ * payment — reducir cuota: the term stays, the payment falls.
+ */
+export const PrepayFlowSchema = z.object({
+  /** A Wealthfolio liability id or mortgage:<purchase id> */
+  loanId: z.string().min(1),
+  mode: z.enum(['max', 'fixed', 'percent']),
+  amount: money,
+  effect: z.enum(['term', 'payment']),
+  /** Up to, not including; null — until the loan is repaid */
+  until: TimingSchema.nullable(),
+  /** Comisión por amortización anticipada, share of the amount prepaid */
+  fee: z.number().finite().min(0).max(0.05),
+});
+
+export const FlowSchema = z.union([AccountFlowSchema, PrepayFlowSchema]);
 
 /** Template values: the user sets their own allocation. */
 export const DEFAULT_EQUITY_SHARE: EquityShare = { fund: 1, brokerage: 1, pension: 0.5 };
@@ -245,12 +382,19 @@ const PlanObject = z
     people: z.array(PersonSchema).min(1).max(2),
     children: z.array(ChildSchema).max(10),
     expenses: z.array(ExpenseSchema).max(50),
+    incomes: z.array(IncomeSchema).max(30).default([]),
+    oneTime: z.array(OneTimeSchema).max(50).default([]),
     returns: ReturnsSchema.default(DEFAULT_RETURNS),
     equityShare: EquityShareSchema.default(DEFAULT_EQUITY_SHARE),
     monteCarlo: MonteCarloSchema.default(DEFAULT_MONTE_CARLO),
     flows: z.array(FlowSchema).max(30).default([]),
     /** Wealthfolio account ids; empty — cash → fondos → brokerage → pension plans */
     withdrawalOrder: z.array(z.string().min(1)).max(50).default([]),
+    /**
+     * Euríbor assumption for variable-rate loans. In Monte Carlo it moves with the cash return:
+     * Euríbor + (cash interest of the year − the plan's cash interest).
+     */
+    euribor: rate.default(0.025),
     /** From this owner age the pension plan is available for withdrawals */
     pensionAccessAge: z.number().int().min(50).max(80).default(65),
     milestones: z.array(MilestoneSchema).max(20).default([]),
@@ -260,8 +404,19 @@ const PlanObject = z
      * automatically) or indexed — money thresholds grow with the plan's inflation.
      */
     taxRules: z.enum(['frozen', 'indexed']).default('frozen'),
+    /**
+     * When the IRPF is paid. sameYear — all of it in its year (plans before phase 5); nextYear —
+     * during the year the pagos a cuenta: modelo 130 of the autónomo and the retenciones on work
+     * income, taken equal to the tax that income adds; the rest, or a refund, with the renta the next
+     * year. Retenciones on interest, dividends and fund redemptions are not modelled: that tax goes
+     * with the renta.
+     */
+    taxPayment: z.enum(['sameYear', 'nextYear']).default('sameYear'),
+    /** The renta of the year before the plan: paid (> 0) or refunded (< 0) in the first year; nextYear only */
+    priorYearTax: z.number().finite().min(-1e7).max(1e7).default(0),
     propertySales: z.array(PropertySaleSchema).max(10).default([]),
     propertyPurchases: z.array(PropertyPurchaseSchema).max(10).default([]),
+    rentals: z.array(RentalSchema).max(10).default([]),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
     message: 'Joint filing needs two people',
@@ -271,23 +426,46 @@ const PlanObject = z
 export const PlanSchema = z.preprocess(upgradeLegacy, PlanObject);
 
 export type Timing = z.infer<typeof TimingSchema>;
+export type Period = z.infer<typeof PeriodSchema>;
+export type Growth = z.infer<typeof GrowthSchema>;
 export type Milestone = z.infer<typeof MilestoneSchema>;
 export type AutonomoIncome = z.infer<typeof AutonomoIncomeSchema>;
 export type PublicPension = z.infer<typeof PublicPensionSchema>;
 export type SpendingRule = z.infer<typeof SpendingRuleSchema>;
 export type PropertySale = z.infer<typeof PropertySaleSchema>;
 export type PropertyPurchase = z.infer<typeof PropertyPurchaseSchema>;
+export type Rental = z.infer<typeof RentalSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
 export type Expense = z.infer<typeof ExpenseSchema>;
+export type IncomeTax = z.infer<typeof IncomeTaxSchema>;
+export type Income = z.infer<typeof IncomeSchema>;
+export type OneTime = z.infer<typeof OneTimeSchema>;
 export type Returns = z.infer<typeof ReturnsSchema>;
 export type EquityShare = z.infer<typeof EquityShareSchema>;
 export type MonteCarlo = z.infer<typeof MonteCarloSchema>;
+export type AccountFlow = z.infer<typeof AccountFlowSchema>;
+export type PrepayFlow = z.infer<typeof PrepayFlowSchema>;
 export type Flow = z.infer<typeof FlowSchema>;
+
+export const isPrepay = (f: Flow): f is PrepayFlow => 'loanId' in f;
 export type Plan = z.infer<typeof PlanSchema>;
 export type Filing = Plan['filing'];
 
-/** Template for a new plan: amounts are placeholders, the user enters their own. */
+/**
+ * Change over time of an autónomo's revenue or expenses: their own growth, or else the phases
+ * 1–4 growth — nominal at the plan's inflation, that is inflation plus
+ * (1 + growth) / (1 + inflation) − 1.
+ */
+export function autonomoGrowth(inc: AutonomoIncome, part: 'revenue' | 'expenses', inflation: number): Growth {
+  const own = part === 'revenue' ? inc.revenueGrowth : inc.expensesGrowth;
+  return own ?? { kind: 'inflation', real: (1 + inc.growth) / (1 + inflation) - 1 };
+}
+
+/**
+ * Base template: amounts are placeholders, the user enters their own. Tests build on it; the page
+ * creates plans from newPlan.
+ */
 export function defaultPlan(startYear: number): Plan {
   return {
     version: 1,
@@ -321,16 +499,27 @@ export function defaultPlan(startYear: number): Plan {
         end: null,
       },
     ],
+    incomes: [],
+    oneTime: [],
     returns: DEFAULT_RETURNS,
     equityShare: DEFAULT_EQUITY_SHARE,
     monteCarlo: DEFAULT_MONTE_CARLO,
     flows: [],
     withdrawalOrder: [],
+    euribor: 0.025,
     pensionAccessAge: 65,
     milestones: [{ id: 'retirement', name: 'Retirement', trigger: { kind: 'age', person: 0, age: 65 } }],
     spending: { kind: 'planned' },
     taxRules: 'frozen',
+    taxPayment: 'sameYear',
+    priorYearTax: 0,
     propertySales: [],
     propertyPurchases: [],
+    rentals: [],
   };
+}
+
+/** A new plan in the page: the base template with the IRPF paid as it is — the renta the next year. */
+export function newPlan(startYear: number): Plan {
+  return { ...defaultPlan(startYear), taxPayment: 'nextYear' };
 }

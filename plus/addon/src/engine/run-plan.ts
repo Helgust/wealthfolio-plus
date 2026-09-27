@@ -1,18 +1,23 @@
 // Yearly engine. Order of steps within a year — plus/docs/architecture.md §3.4:
-// milestones → account income and growth → autónomo income and RETA, public pensions → real
-// estate and loans → expenses (a spending rule sets the discretionary ones) → IRPF → surplus
+// milestones → account income and growth → autónomo income and RETA, public pensions, other and
+// one-time incomes → real estate and loans → expenses (a spending rule sets the discretionary ones)
+// → IRPF → surplus
 // through flows,
-// or deficit from accounts in withdrawal order with tax gross-up. Tax is paid in the same year.
+// or deficit from accounts in withdrawal order with tax gross-up. IRPF is paid in its year, or
+// (taxPayment nextYear) the pagos a cuenta in the year and the rest with the renta the next one.
 // Amounts are nominal; deflator converts them to euros of the plan's first year. Returns and
 // inflation come from the market path: constant for the deterministic plan, one per trial in Monte
 // Carlo.
 import {
   actividad,
+  cotizacionTrabajador,
   indexRules,
+  marginalRate,
   irpfAnual,
   irpfConjunta,
   minimoConjunta,
   minimoPersonalFamiliar,
+  rendimientoTrabajo,
   rulesForYear,
   total,
   type Familiar,
@@ -24,11 +29,13 @@ import {
   type Rentas,
 } from '../es-tax';
 import { isPension, type Owner } from '../model/accounts';
-import type { Filing, Plan, SpendingRule } from '../model/plan';
+import { autonomoGrowth, isPrepay, type Filing, type IncomeTax, type Plan, type SpendingRule } from '../model/plan';
+import { amountInYear } from './amounts';
 import { constantPath, priceLevelAt, priceLevels, type MarketYear } from './market';
 import { accountValue, cloneAccount, deposit, grow, withdraw, type Account } from './portfolio';
 import {
   loansBalance,
+  prepayLoan,
   propertiesValue,
   realEstateCash,
   realEstateYear,
@@ -36,7 +43,7 @@ import {
   type Property,
   type RealEstateYear,
 } from './real-estate';
-import { isActive, reachMilestones } from './timing';
+import { isActive, occursIn, reachMilestones } from './timing';
 
 /** Current finances from Wealthfolio at the plan start (base currency). */
 export interface StartingPoint {
@@ -58,6 +65,13 @@ export interface PersonYear {
   rendimientoNeto: number;
   /** Seguridad Social pension, gross */
   publicPension: number;
+  /** Salaries, gross */
+  wages: number;
+  /** The employee's Seguridad Social cotizaciones on the salaries */
+  employeeContributions: number;
+  /** IRPF on the next euro of the base general and of the base del ahorro, both halves */
+  marginalGeneral: number;
+  marginalAhorro: number;
 }
 
 export interface Balances {
@@ -78,9 +92,25 @@ export interface LedgerRow {
   businessExpenses: number;
   reta: number;
   publicPension: number;
+  /** Salaries, gross, and the employee's cotizaciones on them */
+  wages: number;
+  employeeContributions: number;
+  /** Incomes taxed as gains in the savings base (the gain entered by the user) */
+  gainIncome: number;
+  /** Incomes outside IRPF: herencia, donación */
+  exemptIncome: number;
   irpfEstatal: number;
   irpfAutonomica: number;
+  /** IRPF of the year (accrued), whenever it is paid */
   irpf: number;
+  /** Cash paid for IRPF in the year: pagos a cuenta and last year's renta, or all of it (sameYear) */
+  irpfPaid: number;
+  /** Last year's renta refunded in the year */
+  irpfRefund: number;
+  /** The year's renta still to pay (< 0 — to be refunded) at its end: in net worth */
+  taxOwed: number;
+  /** IRPF ÷ the year's income: revenue, salaries, pensions, interest and dividends, plan payouts, rent, gains */
+  effectiveRate: number;
   /** Sums over the year's tax returns */
   baseLiquidableGeneral: number;
   baseLiquidableAhorro: number;
@@ -140,12 +170,23 @@ interface PersonRentas {
   otras: number;
   rcm: number;
   ganancias: number;
+  /** Rendimientos íntegros del trabajo: salaries, pensions, pension plan payouts */
   trabajo: number;
+  /** The employee's cotizaciones on the salaries in trabajo */
+  cotizaciones: number;
   ppi: number;
   ppes: number;
 }
 
-const emptyRentas = (): PersonRentas => ({ otras: 0, rcm: 0, ganancias: 0, trabajo: 0, ppi: 0, ppes: 0 });
+const emptyRentas = (): PersonRentas => ({
+  otras: 0,
+  rcm: 0,
+  ganancias: 0,
+  trabajo: 0,
+  cotizaciones: 0,
+  ppi: 0,
+  ppes: 0,
+});
 
 /** Account for leftover surplus and shortfalls when the model has no CASH account. */
 export const SINK_ID = '__cash';
@@ -240,6 +281,9 @@ export function runPlan(
   const sink = () => accounts.find((a) => a.id === sinkId)!;
   const reached = new Map<string, number>();
   let lastRuleWithdrawal: number | null = null;
+  const nextYear = plan.taxPayment === 'nextYear';
+  /** The renta of last year: paid (> 0) or refunded (< 0) this year */
+  let settlement = nextYear ? plan.priorYearTax : 0;
 
   for (let year = plan.startYear; year <= endYear(plan); year++) {
     const t = year - plan.startYear;
@@ -275,20 +319,56 @@ export function runPlan(
       ownerShares(a.owner, n).forEach((s, i) => (base[i].rcm += income * s));
     }
 
-    // Autónomo income and RETA; public pensions are rendimientos del trabajo. Income keeps its real
-    // growth over the plan's inflation whatever the year's inflation is.
+    // Autónomo income and RETA; public pensions are rendimientos del trabajo.
     const acts = plan.people.map((p) => {
       const inc = p.autonomo;
       if (!inc || !isActive(inc.start, inc.end, year, plan, reached)) return null;
-      const g = deflator * ((1 + inc.growth) / (1 + plan.inflation)) ** t;
-      return actividad(inc.revenue * g, inc.expenses * g, rules);
+      const inYear = (value: number, part: 'revenue' | 'expenses') =>
+        amountInYear(value, inc.per, autonomoGrowth(inc, part, plan.inflation), t, deflator);
+      return actividad(inYear(inc.revenue, 'revenue'), inYear(inc.expenses, 'expenses'), rules);
     });
     const pensions = plan.people.map((p) =>
-      p.pension && isActive(p.pension.start, null, year, plan, reached) ? p.pension.amount * deflator : 0,
+      p.pension && isActive(p.pension.start, null, year, plan, reached)
+        ? amountInYear(p.pension.amount, p.pension.per, p.pension.growth, t, deflator)
+        : 0,
     );
     pensions.forEach((v, i) => (base[i].trabajo += v));
+
+    // Other and one-time incomes of the people; one-time expenses join the household expenses below.
+    const wages = new Array<number>(n).fill(0);
+    let gainIncome = 0;
+    let exemptIncome = 0;
+    let oneTimeEssential = 0;
+    let oneTimeDiscretionary = 0;
+    const addIncome = (i: number, tax: IncomeTax, amount: number) => {
+      if (i >= n) return; // a person no longer in the plan
+      if (tax === 'trabajo') wages[i] += amount;
+      else if (tax === 'ganancia') {
+        base[i].ganancias += amount;
+        gainIncome += amount;
+      } else exemptIncome += amount;
+    };
+    for (const inc of plan.incomes) {
+      if (isActive(inc.start, inc.end, year, plan, reached)) {
+        addIncome(inc.person, inc.tax, amountInYear(inc.amount, inc.per, inc.growth, t, deflator));
+      }
+    }
+    for (const e of plan.oneTime) {
+      if (!occursIn(e, year, plan, reached)) continue;
+      const amount = e.nominal ? e.amount : e.amount * deflator;
+      if (e.type === 'income') addIncome(e.person, e.tax, amount);
+      else if (e.kind === 'essential') oneTimeEssential += amount;
+      else oneTimeDiscretionary += amount;
+    }
+    const contributions = wages.map((w) => cotizacionTrabajador(w, rules.cotizacion));
+    wages.forEach((w, i) => {
+      base[i].trabajo += w;
+      base[i].cotizaciones = contributions[i];
+    });
+
     const re = realEstateYear(plan, year, rules, properties, loans, reached, ages, m, level);
     re.imputedRent.forEach((v, i) => (base[i].otras += v));
+    re.rentalIncome.forEach((v, i) => (base[i].otras += v));
     re.gains.forEach((g, i) => (base[i].ganancias += g));
     const personas: Persona[] = plan.people.map((p, i) => ({
       edad: ages[i],
@@ -296,14 +376,15 @@ export function runPlan(
       asistencia: false,
     }));
 
-    // Household expenses — in first-year prices, growing with inflation. Under a spending rule
-    // the planned discretionary expenses give way to what the rule leaves (below).
-    let essential = 0;
-    let discretionary = 0;
+    // Household expenses. Under a spending rule the planned discretionary expenses give way to what
+    // the rule leaves (below).
+    let essential = oneTimeEssential;
+    let discretionary = ruleWithdrawal === null ? oneTimeDiscretionary : 0;
     for (const e of plan.expenses) {
       if (!isActive(e.start, e.end, year, plan, reached)) continue;
-      if (e.kind === 'essential') essential += e.amount * deflator;
-      else if (ruleWithdrawal === null) discretionary += e.amount * deflator;
+      const amount = amountInYear(e.amount, e.per, e.growth, t, deflator);
+      if (e.kind === 'essential') essential += amount;
+      else if (ruleWithdrawal === null) discretionary += amount;
     }
 
     const people: PersonYear[] = acts.map((act, i) => ({
@@ -314,17 +395,27 @@ export function runPlan(
       retaTramo: act ? retaLabel(rules.reta.tramos[act.reta_tramo]) : null,
       rendimientoNeto: act?.rendimiento_neto ?? 0,
       publicPension: pensions[i],
+      wages: wages[i],
+      employeeContributions: contributions[i],
+      marginalGeneral: 0,
+      marginalAhorro: 0,
     }));
     const sum = (f: (p: PersonYear) => number) => people.reduce((s, p) => s + f(p), 0);
     const revenue = sum((p) => p.revenue);
     const businessExpenses = sum((p) => p.businessExpenses);
     const reta = sum((p) => p.cuotaReta);
     const publicPension = sum((p) => p.publicPension);
+    const wagesTotal = sum((p) => p.wages);
+    const employeeContributions = sum((p) => p.employeeContributions);
     let cf0 =
       revenue -
       businessExpenses -
       reta +
-      publicPension -
+      publicPension +
+      wagesTotal -
+      employeeContributions +
+      gainIncome +
+      exemptIncome -
       essential -
       discretionary +
       investmentIncome +
@@ -334,14 +425,25 @@ export function runPlan(
       taxYear(plan, year, rules, filing, personas, acts, extra, carries, jointCarry);
     const withDrawdown = (d: Drawdown) =>
       base.map((b, i) => ({ ...b, ganancias: b.ganancias + d.ganancias[i], trabajo: b.trabajo + d.trabajo[i] }));
+    let taxed = tax(base);
+    // IRPF paid in the year. nextYear: the pagos a cuenta — modelo 130 on the activity and the
+    // retenciones on work income (the tax it adds to the rest) — plus last year's renta; they do not
+    // change with this year's withdrawals and contributions, whose tax goes with the renta.
+    let onAccount = 0;
+    if (nextYear) {
+      const pagos130 = acts.reduce((s, a) => s + rules.actividad.pago_fraccionado * Math.max(a?.rendimiento_neto ?? 0, 0), 0);
+      const withoutWork = base.map((b) => ({ ...b, trabajo: 0, cotizaciones: 0 }));
+      const retenciones = base.some((b) => b.trabajo > 0) ? Math.max(taxed.irpf - tax(withoutWork).irpf, 0) : 0;
+      onAccount = pagos130 + retenciones;
+    }
+    const cashTax = (t: TaxYear) => (nextYear ? settlement + onAccount : t.irpf);
     if (ruleWithdrawal !== null) {
       // Discretionary = income + the rule's withdrawal − costs − essential − taxes (with the tax on
       // that withdrawal), not below 0. The withdrawal itself happens below as for any deficit.
       const d = drawdown(plan, withdrawalOrder(plan, accounts.map(cloneAccount)), ruleWithdrawal, ages);
-      discretionary = Math.max(cf0 + d.raised - tax(withDrawdown(d)).irpf, 0);
+      discretionary = Math.max(cf0 + d.raised - cashTax(tax(withDrawdown(d))), 0);
       cf0 -= discretionary;
     }
-    let taxed = tax(base);
     let realizedGains = 0;
     let pensionContributions = 0;
     let pensionWithdrawals = 0;
@@ -349,19 +451,39 @@ export function runPlan(
     let withdrawals = emptyBalances();
     let shortfall = 0;
 
-    if (cf0 - taxed.irpf >= 0) {
+    if (cf0 - cashTax(taxed) >= 0) {
       // Surplus → flows in order; the rest and the tax saving from contributions → cash.
       const prev = rules.reducciones.prevision_social;
-      const room: PensionRoom[] = acts.map((act) => ({
-        general: prev.limite_general,
-        incremento: act ? prev.incremento_autonomo : 0,
-        tope: prev.porcentaje_rendimientos * Math.max(act?.rendimiento_neto ?? 0, 0),
-      }));
+      const room: PensionRoom[] = acts.map((act, i) => {
+        const b = base[i];
+        const rn = act?.rendimiento_neto ?? 0;
+        const otras = rn + b.otras + b.rcm + b.ganancias;
+        const trabajo = rendimientoTrabajo(b.trabajo, otras, rules.reducciones.trabajo, b.cotizaciones);
+        return {
+          general: prev.limite_general,
+          incremento: act ? prev.incremento_autonomo : 0,
+          // 30 % of rendimientos netos del trabajo + actividades (art. 52.1.a LIRPF)
+          tope: prev.porcentaje_rendimientos * Math.max(rn + trabajo.neto_reducido, 0),
+        };
+      });
       const withContrib = base.map((b) => ({ ...b }));
-      let budget = cf0 - taxed.irpf;
+      let budget = cf0 - cashTax(taxed);
       for (const f of plan.flows) {
+        if (budget <= 0) continue;
+        if (isPrepay(f)) {
+          // Amortización anticipada at the end of the year; the fee comes on top.
+          const l = loans.find((x) => x.id === f.loanId);
+          if (!l || l.balance <= 0 || !isActive(null, f.until, year, plan, reached)) continue;
+          const want = f.mode === 'fixed' ? f.amount * deflator : f.mode === 'percent' ? budget * f.amount : l.balance;
+          const x = Math.min(want, l.balance, budget / (1 + f.fee));
+          prepayLoan(l, x, f.effect);
+          re.loanPrepaid += x;
+          re.prepaymentFees += x * f.fee;
+          budget -= x * (1 + f.fee);
+          continue;
+        }
         const a = accounts.find((x) => x.id === f.accountId);
-        if (!a || budget <= 0) continue;
+        if (!a) continue;
         let want =
           f.mode === 'fixed'
             ? f.amount * deflator
@@ -384,7 +506,7 @@ export function runPlan(
       }
       if (pensionContributions > 0) {
         const after = tax(withContrib);
-        budget += taxed.irpf - after.irpf;
+        budget += cashTax(taxed) - cashTax(after);
         taxed = after;
       }
       sink().cash += budget;
@@ -395,7 +517,7 @@ export function runPlan(
       // monotonically from below, at the rate of the marginal tax. The tax is piecewise linear in
       // x, so the secant through the last two points usually lands on the fixed point at once; a
       // secant step that goes past it is replaced by the plain step.
-      let x = taxed.irpf - cf0;
+      let x = cashTax(taxed) - cf0;
       let trial = accounts;
       let raised = 0;
       let need = x;
@@ -410,7 +532,7 @@ export function runPlan(
         withdrawals = d.byKind;
         realizedGains = d.ganancias.reduce((s, g) => s + g, 0);
         pensionWithdrawals = d.trabajo.reduce((s, g) => s + g, 0);
-        need = taxed.irpf - cf0;
+        need = cashTax(taxed) - cf0;
         if (secant && need - raised < -1e-7) {
           x = below!.x + below!.gap;
           secant = false;
@@ -436,10 +558,30 @@ export function runPlan(
     }
     carries = taxed.carries;
     jointCarry = taxed.jointCarry;
+    const paid = cashTax(taxed);
+    const owed = nextYear ? taxed.irpf - onAccount : 0;
+    const irpfRefund = nextYear ? Math.max(-settlement, 0) : 0;
+    settlement = owed;
 
     const balances = emptyBalances();
     for (const a of accounts) balances[balanceKey(a.kind)] += accountValue(a);
     const d = taxed.declaraciones;
+    // Marginal rates: of each person's return, or of the joint one for both.
+    people.forEach((p, i) => {
+      const m = marginalRates(d[filing === 'joint' ? 0 : i], rules);
+      p.marginalGeneral = m.general;
+      p.marginalAhorro = m.ahorro;
+    });
+    const income =
+      revenue +
+      wagesTotal +
+      publicPension +
+      investmentIncome +
+      pensionWithdrawals +
+      re.rent +
+      gainIncome +
+      Math.max(realizedGains, 0) +
+      re.gains.reduce((s, g) => s + Math.max(g, 0), 0);
     rows.push({
       year,
       people,
@@ -447,9 +589,17 @@ export function runPlan(
       businessExpenses,
       reta,
       publicPension,
+      wages: wagesTotal,
+      employeeContributions,
+      gainIncome,
+      exemptIncome,
       irpfEstatal: d.reduce((s, x) => s + x.cuota_liquida.estatal, 0),
       irpfAutonomica: d.reduce((s, x) => s + x.cuota_liquida.autonomica, 0),
       irpf: taxed.irpf,
+      irpfPaid: paid + irpfRefund,
+      irpfRefund,
+      taxOwed: owed,
+      effectiveRate: income > 0 ? taxed.irpf / income : 0,
       baseLiquidableGeneral: d.reduce((s, x) => s + x.base_liquidable_general, 0),
       baseLiquidableAhorro: d.reduce((s, x) => s + x.base_liquidable_ahorro, 0),
       essentialExpenses: essential,
@@ -458,7 +608,7 @@ export function runPlan(
       realizedGains,
       pensionContributions,
       pensionWithdrawals,
-      netCashFlow: cf0 - taxed.irpf,
+      netCashFlow: cf0 - paid,
       deposits,
       withdrawals,
       shortfall,
@@ -470,7 +620,7 @@ export function runPlan(
       realEstate: re,
       cash: balances.cash,
       otherAssets,
-      netWorth: totalOf(balances) + propertiesValue(properties) - loansBalance(loans) + otherAssets,
+      netWorth: totalOf(balances) + propertiesValue(properties) - loansBalance(loans) + otherAssets - owed,
       deflator,
       milestones: reachedNow.map((m) => m.id),
     });
@@ -568,6 +718,7 @@ function taxYear(
     rendimiento_actividad: acts[i]?.rendimiento_neto ?? 0,
     // Pension plan payouts are rendimientos íntegros del trabajo: otros gastos and reducción art. 20.
     trabajo_integro: e.trabajo,
+    cotizaciones_trabajo: e.cotizaciones,
     otras_rentas_general: e.otras,
     rcm: e.rcm,
     ganancias: e.ganancias,
@@ -603,6 +754,24 @@ function taxYear(
     carries: declaraciones.map((d) => ({ general: d.pendientes_general, ahorro: d.pendientes_ahorro })),
     jointCarry,
   };
+}
+
+/**
+ * IRPF on the next euro of each base, estatal + autonómica. The mínimo is taxed at the scale too
+ * and subtracted (art. 63 LIRPF): while a base is within the mínimo left for it, the next euro costs
+ * nothing.
+ */
+export function marginalRates(d: IrpfAnual, rules: IrpfRules): { general: number; ahorro: number } {
+  const blg = d.base_liquidable_general;
+  const bla = d.base_liquidable_ahorro;
+  let general = 0;
+  let ahorro = 0;
+  for (const half of ['estatal', 'autonomica'] as const) {
+    const minimo = d.minimo[half];
+    if (blg >= minimo) general += marginalRate(rules[half].general, blg);
+    if (bla >= Math.max(minimo - blg, 0)) ahorro += marginalRate(rules[half].ahorro, bla);
+  }
+  return { general, ahorro };
 }
 
 function retaLabel(t: { tabla: string; tramo: number }): string {

@@ -21,17 +21,23 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Account } from '../engine/portfolio';
-import type { Property } from '../engine/real-estate';
+import type { Loan, Property } from '../engine/real-estate';
 import { availableYears } from '../es-tax';
 import {
+  autonomoGrowth,
   PlanSchema,
+  WITH_INFLATION,
+  type AutonomoIncome,
   type Expense,
+  type Growth,
   type Milestone,
   type Person,
   type Plan,
   type SpendingRule,
 } from '../model/plan';
+import { AmountInput, GrowthInput, PeriodSelect } from './amount-input';
 import { Field, NumberInput, PercentInput } from './form-fields';
+import { IncomesEditor, OneTimeEditor } from './income-editor';
 import { InvestmentsEditor } from './investments-editor';
 import { RealEstateEditor } from './real-estate-editor';
 import { milestoneUses, TimingInput } from './timing-input';
@@ -41,6 +47,7 @@ export type EditorSection =
   | 'household'
   | 'milestones'
   | 'expenses'
+  | 'oneTime'
   | 'investments'
   | 'realEstate'
   | 'monteCarlo';
@@ -50,8 +57,9 @@ const TITLES: Record<EditorSection, string> = {
   household: 'Household and income',
   milestones: 'Milestones',
   expenses: 'Household expenses',
+  oneTime: 'One-time events',
   investments: 'Returns, flows and withdrawals',
-  realEstate: 'Real estate: sales and purchases',
+  realEstate: 'Real estate: sales, purchases and rentals',
   monteCarlo: 'Monte Carlo',
 };
 
@@ -65,15 +73,19 @@ interface Props {
   accounts: Account[];
   /** Modelled properties — the ones a plan can sell */
   properties: Property[];
+  /** Modelled loans — the ones a plan can prepay */
+  loans: Loan[];
 }
 
-export function PlanEditor({ plan, section, onClose, onSave, accounts, properties }: Props) {
+export function PlanEditor({ plan, section, onClose, onSave, accounts, properties, loans }: Props) {
   return (
     <Sheet open={section !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="right" className="overflow-y-auto" style={{ width: 640, maxWidth: 640 }}>
         <SheetHeader>
           <SheetTitle>{TITLES[section ?? 'all']}</SheetTitle>
-          <SheetDescription>Amounts are per year, in euros of the plan's first year.</SheetDescription>
+          <SheetDescription>
+            Amounts are in euros of the plan's first year, per year unless a period is chosen.
+          </SheetDescription>
         </SheetHeader>
         {/* The form mounts on open, so the draft always starts from the plan. */}
         {section && (
@@ -82,6 +94,7 @@ export function PlanEditor({ plan, section, onClose, onSave, accounts, propertie
             section={section}
             accounts={accounts}
             properties={properties}
+            loans={loans}
             onSave={onSave}
             onCancel={onClose}
           />
@@ -102,6 +115,8 @@ const newPerson = (plan: Plan): Person => ({
 const newExpense = (): Expense => ({
   name: 'Expense',
   amount: 0,
+  per: 'month',
+  growth: WITH_INFLATION,
   kind: 'discretionary',
   start: null,
   end: null,
@@ -118,6 +133,7 @@ function PlanForm({
   section,
   accounts,
   properties,
+  loans,
   onSave,
   onCancel,
 }: {
@@ -125,6 +141,7 @@ function PlanForm({
   section: EditorSection;
   accounts: Account[];
   properties: Property[];
+  loans: Loan[];
   onSave: (plan: Plan) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -153,9 +170,11 @@ function PlanForm({
 
   const parts = [
     show('household') && <HouseholdSection key="household" draft={draft} set={set} />,
+    show('household') && <IncomesEditor key="incomes" draft={draft} set={set} />,
     show('milestones') && <MilestonesSection key="milestones" draft={draft} set={set} titled={section === 'all'} />,
     show('expenses') && <ExpensesSection key="expenses" draft={draft} set={set} titled={section === 'all'} />,
-    show('investments') && <InvestmentsEditor key="investments" draft={draft} set={set} accounts={accounts} />,
+    show('oneTime') && <OneTimeEditor key="oneTime" draft={draft} set={set} titled={section === 'all'} />,
+    show('investments') && <InvestmentsEditor key="investments" draft={draft} set={set} accounts={accounts} loans={loans} />,
     show('realEstate') && <RealEstateEditor key="realEstate" draft={draft} set={set} properties={properties} />,
     show('monteCarlo') && <MonteCarloSection key="monteCarlo" draft={draft} set={set} titled={section === 'all'} />,
   ].filter(Boolean);
@@ -191,6 +210,14 @@ interface SectionProps {
 function HouseholdSection({ draft, set }: SectionProps) {
   const setPerson = (i: number, patch: Partial<Person>) =>
     set({ people: draft.people.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const setAutonomo = (i: number, patch: Partial<AutonomoIncome>) =>
+    setPerson(i, { autonomo: { ...draft.people[i].autonomo!, ...patch } });
+  /** Growth of revenue or expenses; the other part keeps its growth, made explicit if it was the phases 1–4 one. */
+  const setAutonomoGrowth = (i: number, part: 'revenue' | 'expenses', g: Growth) => {
+    const inc = draft.people[i].autonomo!;
+    const other = autonomoGrowth(inc, part === 'revenue' ? 'expenses' : 'revenue', draft.inflation);
+    setAutonomo(i, part === 'revenue' ? { revenueGrowth: g, expensesGrowth: other } : { revenueGrowth: other, expensesGrowth: g });
+  };
 
   return (
     <div className="space-y-6">
@@ -222,6 +249,22 @@ function HouseholdSection({ draft, set }: SectionProps) {
             </SelectContent>
           </Select>
         </Field>
+        <Field label="IRPF paid">
+          <Select value={draft.taxPayment} onValueChange={(v) => set({ taxPayment: v as Plan['taxPayment'] })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nextYear">Next year (renta)</SelectItem>
+              <SelectItem value="sameYear">In its year</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        {draft.taxPayment === 'nextYear' && (
+          <Field label="Last renta: to pay (+) or refund (−)">
+            <NumberInput value={draft.priorYearTax} step={100} onChange={(v) => set({ priorYearTax: v ?? 0 })} />
+          </Field>
+        )}
         <Field label={`Tax thresholds after ${availableYears().at(-1)}`}>
           <Select value={draft.taxRules} onValueChange={(v) => set({ taxRules: v as Plan['taxRules'] })}>
             <SelectTrigger>
@@ -244,7 +287,15 @@ function HouseholdSection({ draft, set }: SectionProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => set({ people: draft.people.slice(0, 1), filing: 'individual' })}
+                onClick={() =>
+                  set({
+                    people: draft.people.slice(0, 1),
+                    filing: 'individual',
+                    // The partner's incomes go with them.
+                    incomes: draft.incomes.filter((x) => x.person === 0),
+                    oneTime: draft.oneTime.filter((x) => x.type === 'expense' || x.person === 0),
+                  })
+                }
               >
                 <Trash2 className="h-4 w-4" /> Remove
               </Button>
@@ -280,7 +331,16 @@ function HouseholdSection({ draft, set }: SectionProps) {
               onCheckedChange={(on) =>
                 setPerson(i, {
                   autonomo: on
-                    ? { revenue: 0, expenses: 0, growth: draft.inflation, start: null, end: null }
+                    ? {
+                        revenue: 0,
+                        expenses: 0,
+                        per: 'month',
+                        growth: draft.inflation,
+                        revenueGrowth: WITH_INFLATION,
+                        expensesGrowth: WITH_INFLATION,
+                        start: null,
+                        end: null,
+                      }
                     : null,
                 })
               }
@@ -293,31 +353,40 @@ function HouseholdSection({ draft, set }: SectionProps) {
                 <Field label="Revenue (facturación)">
                   <NumberInput
                     value={p.autonomo.revenue}
-                    step={1000}
-                    onChange={(v) => setPerson(i, { autonomo: { ...p.autonomo!, revenue: v ?? 0 } })}
+                    step={100}
+                    onChange={(v) => setAutonomo(i, { revenue: v ?? 0 })}
                   />
                 </Field>
                 <Field label="Expenses, excl. RETA">
                   <NumberInput
                     value={p.autonomo.expenses}
-                    step={500}
-                    onChange={(v) => setPerson(i, { autonomo: { ...p.autonomo!, expenses: v ?? 0 } })}
+                    step={100}
+                    onChange={(v) => setAutonomo(i, { expenses: v ?? 0 })}
                   />
                 </Field>
-                <Field label="Growth, % per year">
-                  <PercentInput
-                    value={p.autonomo.growth}
-                    onChange={(v) => setPerson(i, { autonomo: { ...p.autonomo!, growth: v } })}
-                  />
+                <Field label="Period">
+                  <PeriodSelect value={p.autonomo.per} onChange={(per) => setAutonomo(i, { per })} />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <Field label="Revenue change per year, %">
+                  <GrowthInput
+                    value={autonomoGrowth(p.autonomo, 'revenue', draft.inflation)}
+                    onChange={(g) => setAutonomoGrowth(i, 'revenue', g)}
+                  />
+                </Field>
+                <Field label="Expenses change per year, %">
+                  <GrowthInput
+                    value={autonomoGrowth(p.autonomo, 'expenses', draft.inflation)}
+                    onChange={(g) => setAutonomoGrowth(i, 'expenses', g)}
+                  />
+                </Field>
                 <Field label="Starts">
                   <TimingInput
                     value={p.autonomo.start}
                     plan={draft}
                     noneLabel="Plan start"
-                    onChange={(t) => setPerson(i, { autonomo: { ...p.autonomo!, start: t } })}
+                    onChange={(t) => setAutonomo(i, { start: t })}
                   />
                 </Field>
                 <Field label="Stops">
@@ -325,7 +394,7 @@ function HouseholdSection({ draft, set }: SectionProps) {
                     value={p.autonomo.end}
                     plan={draft}
                     noneLabel="Never"
-                    onChange={(t) => setPerson(i, { autonomo: { ...p.autonomo!, end: t } })}
+                    onChange={(t) => setAutonomo(i, { end: t })}
                   />
                 </Field>
               </div>
@@ -337,28 +406,43 @@ function HouseholdSection({ draft, set }: SectionProps) {
               checked={p.pension !== null}
               onCheckedChange={(on) =>
                 setPerson(i, {
-                  pension: on ? { amount: 0, start: { kind: 'age', person: i, age: 67 } } : null,
+                  pension: on
+                    ? { amount: 0, per: 'year', growth: WITH_INFLATION, start: { kind: 'age', person: i, age: 67 } }
+                    : null,
                 })
               }
             />
             <Label className="text-sm">Seguridad Social pension</Label>
           </div>
           {p.pension && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Gross per year (from the SS report)">
-                <NumberInput
-                  value={p.pension.amount}
-                  step={500}
-                  onChange={(v) => setPerson(i, { pension: { ...p.pension!, amount: v ?? 0 } })}
-                />
-              </Field>
-              <Field label="Starts">
-                <TimingInput
-                  value={p.pension.start}
-                  plan={draft}
-                  onChange={(t) => t && setPerson(i, { pension: { ...p.pension!, start: t } })}
-                />
-              </Field>
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Gross (from the SS report)">
+                  <AmountInput
+                    value={p.pension.amount}
+                    per={p.pension.per}
+                    step={100}
+                    onChange={(amount, per) => setPerson(i, { pension: { ...p.pension!, amount, per } })}
+                  />
+                </Field>
+                <Field label="Change per year, %">
+                  <GrowthInput
+                    value={p.pension.growth ?? WITH_INFLATION}
+                    onChange={(growth) => setPerson(i, { pension: { ...p.pension!, growth } })}
+                  />
+                </Field>
+                <Field label="Starts">
+                  <TimingInput
+                    value={p.pension.start}
+                    plan={draft}
+                    onChange={(t) => t && setPerson(i, { pension: { ...p.pension!, start: t } })}
+                  />
+                </Field>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                The SS pays 14 pagas a year, and per month counts 12: enter the yearly amount, paga × 14.
+                Revalorización by the IPC is inflation + 0 %.
+              </p>
             </div>
           )}
         </section>
@@ -506,34 +590,39 @@ function ExpensesSection({ draft, set, titled }: SectionProps) {
       {titled && <h3 className="font-medium">Household expenses</h3>}
       {draft.expenses.map((e, i) => (
         <div key={i} className="space-y-2 rounded-md border p-3">
-          <div className="grid items-end gap-2" style={{ gridTemplateColumns: '1fr 7rem 9rem auto' }}>
+          <div className="grid grid-cols-2 items-end gap-2">
             <Field label="Name">
               <Input value={e.name} onChange={(ev) => setExpense(i, { name: ev.target.value })} />
             </Field>
-            <Field label="Per year">
-              <NumberInput value={e.amount} step={500} onChange={(v) => setExpense(i, { amount: v ?? 0 })} />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field label="Kind">
+                  <Select value={e.kind} onValueChange={(v) => setExpense(i, { kind: v as Expense['kind'] })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="essential">Essential</SelectItem>
+                      <SelectItem value="discretionary">Discretionary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Remove expense"
+                onClick={() => set({ expenses: draft.expenses.filter((_, j) => j !== i) })}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+            <Field label="Amount">
+              <AmountInput value={e.amount} per={e.per} onChange={(amount, per) => setExpense(i, { amount, per })} />
             </Field>
-            <Field label="Kind">
-              <Select value={e.kind} onValueChange={(v) => setExpense(i, { kind: v as Expense['kind'] })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="essential">Essential</SelectItem>
-                  <SelectItem value="discretionary">Discretionary</SelectItem>
-                </SelectContent>
-              </Select>
+            <Field label="Change per year, %">
+              <GrowthInput value={e.growth ?? WITH_INFLATION} onChange={(growth) => setExpense(i, { growth })} />
             </Field>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Remove expense"
-              onClick={() => set({ expenses: draft.expenses.filter((_, j) => j !== i) })}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
             <Field label="Starts">
               <TimingInput
                 value={e.start}

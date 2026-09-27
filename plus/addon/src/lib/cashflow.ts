@@ -33,8 +33,13 @@ export function yearFlows(row: LedgerRow, mode: ValueMode = 'nominal'): YearFlow
   const re = row.realEstate;
   const sources = [
     item('revenue', 'Autónomo revenue', 'income', row.revenue),
+    item('wages', 'Salaries', 'income', row.wages),
     item('publicPension', 'Seguridad Social pension', 'income', row.publicPension),
+    item('gainIncome', 'Gains', 'income', row.gainIncome),
+    item('exemptIncome', 'Tax-free income', 'income', row.exemptIncome),
     item('investmentIncome', 'Interest & dividends', 'income', row.investmentIncome),
+    item('irpfRefund', 'IRPF refund (last year)', 'income', row.irpfRefund),
+    item('rent', 'Rent', 'income', re.rent),
     item('fromCash', 'From cash', 'accounts', w.cash),
     item('fromFund', 'Sold fondos', 'accounts', w.fund),
     item('fromBrokerage', 'Sold brokerage', 'accounts', w.brokerage),
@@ -44,19 +49,24 @@ export function yearFlows(row: LedgerRow, mode: ValueMode = 'nominal'): YearFlow
     item('shortfall', 'Shortfall (cash below zero)', 'accounts', row.shortfall),
   ];
   const uses = [
-    item('irpf', 'IRPF', 'taxes', row.irpf),
+    item('irpf', 'IRPF', 'taxes', row.irpfPaid),
     item('reta', 'RETA', 'taxes', row.reta),
+    item('employeeContributions', 'Employee Social Security', 'taxes', row.employeeContributions),
     item('ibi', 'IBI', 'taxes', re.ibi),
     item('purchaseTax', 'Purchase tax (ITP / IVA + AJD)', 'taxes', re.purchaseTax),
     item('businessExpenses', 'Business expenses', 'spending', row.businessExpenses),
     item('essential', 'Essential expenses', 'spending', row.essentialExpenses),
     item('discretionary', 'Discretionary expenses', 'spending', row.discretionaryExpenses),
+    item('ownershipCosts', 'Comunidad & insurance', 'spending', re.ownershipCosts),
+    item('rentalRepairs', 'Repairs of homes let', 'spending', re.rentalRepairs),
     item('loanInterest', 'Loan interest', 'spending', re.loanInterest),
+    item('prepaymentFees', 'Prepayment fees', 'spending', re.prepaymentFees),
     item('toCash', 'To cash', 'saving', d.cash),
     item('toFund', 'To fondos', 'saving', d.fund),
     item('toBrokerage', 'To brokerage', 'saving', d.brokerage),
     item('toPension', 'To pension plans', 'saving', d.pension),
     item('loanPrincipal', 'Loan principal', 'saving', re.loanPrincipal + re.loanRepaidAtSale),
+    item('loanPrepaid', 'Loan prepayment', 'saving', re.loanPrepaid),
     item('purchaseCost', 'Property purchase', 'saving', re.purchaseCost),
   ];
   // Amounts below a cent are rounding noise of the gross-up iteration.

@@ -10,7 +10,7 @@ const money = z.number().finite().min(0);
 /**
  * habitual — vivienda habitual (no imputación; exempt gain on reinvestment or from 65);
  * second — not rented and not used in an activity: imputación de rentas (art. 85 LIRPF);
- * rented — rented out: no imputación, the rental income is not modelled;
+ * rented — rented out: no imputación; the rent is modelled by a rental in the plan;
  * other — outside the model: value stays constant.
  */
 export const PropertyUseSchema = z.enum(['habitual', 'second', 'rented', 'other']);
@@ -26,11 +26,34 @@ export const PropertySettingSchema = z.object({
   ibi: money,
   /** Taxes and costs paid at purchase (ITP or IVA, notary, registry): part of the valor de adquisición */
   acquisitionCosts: money,
+  /** Comunidad and insurance per year in first-year prices */
+  community: money.optional(),
+  insurance: money.optional(),
+  /**
+   * Share of the building in the valor catastral (IBI receipt: valor de la construcción ÷ valor
+   * catastral) — for the amortización of a rental; absent — none is deducted
+   */
+  constructionShare: z.number().finite().min(0).max(1).optional(),
 });
 
-/** A loan is modelled once its monthly payment is known; until then it stays constant. */
+/**
+ * A loan is modelled once its monthly payment or the years left are known; until then it stays
+ * constant. The rate is Wealthfolio's interest rate.
+ */
 export const LoanSettingSchema = z.object({
   monthlyPayment: money,
+  /** Years left: the payment is the annuity over them; absent — monthlyPayment */
+  years: z.number().int().min(1).max(40).optional(),
+  /**
+   * Absent — fixed. Otherwise Euríbor + diferencial, revised once a year from variableFrom
+   * (null — from the plan's second year: Wealthfolio's rate is this year's).
+   */
+  variable: z
+    .object({
+      diferencial: z.number().finite().min(-0.05).max(0.1),
+      variableFrom: z.number().int().min(1900).max(2200).nullable(),
+    })
+    .optional(),
 });
 
 export const RealEstateSettingsSchema = z.object({

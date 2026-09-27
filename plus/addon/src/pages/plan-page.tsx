@@ -38,7 +38,7 @@ import { REAL_ESTATE_KEY, SETTINGS_KEY, usePlannerData } from '../hooks/use-plan
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 import { saveAccountSettings, type AccountSettings } from '../model/accounts';
 import { saveRealEstateSettings, type RealEstateSettings } from '../model/properties';
-import { defaultPlan, type Plan } from '../model/plan';
+import { newPlan, type Plan } from '../model/plan';
 import {
   activeEntry,
   addPlan,
@@ -128,7 +128,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               onNew={() =>
                 run((b) =>
                   addPlan(ctx.api.storage, b, {
-                    ...defaultPlan(new Date().getFullYear()),
+                    ...newPlan(new Date().getFullYear()),
                     name: `Plan ${b.entries.length + 1}`,
                   }),
                 )
@@ -230,7 +230,13 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
             <CashflowTab rows={rows} currency={currency} mode={mode} />
           </TabsContent>
           <TabsContent value="taxes">
-            <TaxesTab result={result} alternative={alternative} currency={currency} mode={mode} />
+            <TaxesTab
+              result={result}
+              alternative={alternative}
+              people={plan.people.map((p) => p.name)}
+              currency={currency}
+              mode={mode}
+            />
           </TabsContent>
           <TabsContent value="montecarlo">
             <MonteCarloTab
@@ -277,6 +283,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         plan={plan}
         accounts={start.accounts}
         properties={start.properties ?? []}
+        loans={start.loans ?? []}
         section={editing}
         onClose={() => setEditing(null)}
         onSave={save}
