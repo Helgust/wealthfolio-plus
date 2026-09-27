@@ -20,6 +20,7 @@ const COLUMNS: Column[] = [
   { label: 'Interest & dividends', value: (r) => r.investmentIncome },
   { label: 'Realized gains', value: (r) => r.realizedGains },
   { label: 'Pension payouts', value: (r) => r.pensionWithdrawals },
+  { label: 'IRPF on sales', value: (r) => r.sales.reduce((s, x) => s + x.tax, 0) },
   { label: 'Base liq. general', value: (r) => r.baseLiquidableGeneral },
   { label: 'Base liq. ahorro', value: (r) => r.baseLiquidableAhorro },
   { label: 'IRPF estatal', value: (r) => r.irpfEstatal },

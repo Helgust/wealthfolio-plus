@@ -29,6 +29,9 @@ export const PropertySettingSchema = z.object({
   /** Comunidad and insurance per year in first-year prices */
   community: money.optional(),
   insurance: money.optional(),
+  /** The months IBI and insurance are paid in; absent — spread over the year */
+  ibiMonth: z.number().int().min(1).max(12).optional(),
+  insuranceMonth: z.number().int().min(1).max(12).optional(),
   /**
    * Share of the building in the valor catastral (IBI receipt: valor de la construcción ÷ valor
    * catastral) — for the amortización of a rental; absent — none is deducted

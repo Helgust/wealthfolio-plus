@@ -14,7 +14,7 @@ import {
   type ChartConfig,
 } from '@wealthfolio/ui/chart';
 import type { ReactNode } from 'react';
-import type { LedgerRow } from '../engine/run-plan';
+import type { LedgerRow, PlanResult } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 import { FOREST, OCHRE, PURPLE } from './palette';
 
@@ -42,6 +42,8 @@ export function SlotSwatch({ slot }: { slot: number }) {
 export interface ComparedRun {
   name: string;
   rows: LedgerRow[];
+  /** The whole run: goals and months */
+  result: PlanResult;
 }
 
 interface Props {

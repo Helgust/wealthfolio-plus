@@ -21,6 +21,7 @@ import { Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccountsTab } from '../components/accounts-tab';
 import { CashflowTab } from '../components/cashflow-tab';
+import { GoalsTab, MONTH_YEARS } from '../components/goals-tab';
 import { LedgerTable } from '../components/ledger-table';
 import { MonteCarloTab } from '../components/monte-carlo-tab';
 import { NetWorthChart } from '../components/net-worth-chart';
@@ -71,7 +72,10 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
 
   const active = book && activeEntry(book);
   const plan = active?.plan;
-  const result = useMemo(() => (plan && start ? runPlan(plan, start) : null), [plan, start]);
+  const result = useMemo(
+    () => (plan && start ? runPlan(plan, start, plan.filing, undefined, MONTH_YEARS) : null),
+    [plan, start],
+  );
   // For a couple, also compute the other filing type — compared on the "Taxes" tab.
   const alternative = useMemo<PlanResult | null>(() => {
     if (!plan || !start || plan.people.length !== 2) return null;
@@ -209,6 +213,7 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         <Tabs defaultValue="plan">
           <TabsList>
             <TabsTrigger value="plan">Plan</TabsTrigger>
+            <TabsTrigger value="goals">Goals</TabsTrigger>
             <TabsTrigger value="cashflow">Cash flow</TabsTrigger>
             <TabsTrigger value="taxes">Taxes</TabsTrigger>
             <TabsTrigger value="montecarlo">Monte Carlo</TabsTrigger>
@@ -224,6 +229,16 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               loans={start.loans ?? []}
               currency={currency}
               onEdit={setEditing}
+            />
+          </TabsContent>
+          <TabsContent value="goals">
+            <GoalsTab
+              plan={plan}
+              result={result}
+              start={start}
+              currency={currency}
+              onEdit={setEditing}
+              onPlanChange={save}
             />
           </TabsContent>
           <TabsContent value="cashflow">

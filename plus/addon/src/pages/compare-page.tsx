@@ -1,5 +1,6 @@
 // Compare page: net worth of up to three plans on one chart and key metrics with the difference to
-// plan A. Every plan starts from the same current Wealthfolio data.
+// plan A, with when their goals are reached and what a loan goal's loan costs. Every plan starts
+// from the same current Wealthfolio data.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
   Card,
@@ -27,7 +28,9 @@ import { PageMessage } from '../components/page-message';
 import { runPlan } from '../engine/run-plan';
 import { usePlannerData } from '../hooks/use-planner-data';
 import { commonEndYear, planMetrics, type PlanMetrics } from '../lib/compare';
-import { formatMoney, type ValueMode } from '../lib/format';
+import { formatMoney, formatMonth, type ValueMode } from '../lib/format';
+import { goalLabel, loanInterest, loanPayment } from '../lib/goals';
+import type { Plan } from '../model/plan';
 import type { PlanBook } from '../model/plan-storage';
 
 const NONE = 'none';
@@ -37,6 +40,13 @@ const slotName = (i: number) => `Plan ${'ABC'[i]}`;
 function defaultSlots(book: PlanBook): (string | null)[] {
   const others = book.entries.map((e) => e.id).filter((id) => id !== book.activeId);
   return Array.from({ length: SLOT_COUNT }, (_, i) => (i === 0 ? book.activeId : (others[i - 1] ?? null)));
+}
+
+/** A row of a goal: a date as text, or money with the difference to plan A. */
+interface GoalRow {
+  label: string;
+  text?: (run: ComparedRun & { plan: Plan }) => string;
+  money?: (run: ComparedRun & { plan: Plan }) => number | null;
 }
 
 interface MetricRow {
@@ -59,11 +69,13 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
     if (!book) return [];
     return (picked ?? defaultSlots(book)).map((id) => (book.entries.some((e) => e.id === id) ? id : null));
   }, [book, picked]);
-  const runs = useMemo<(ComparedRun | null)[]>(
+  const runs = useMemo<((ComparedRun & { plan: Plan }) | null)[]>(
     () =>
       slots.map((id) => {
         const entry = book?.entries.find((e) => e.id === id);
-        return entry && start ? { name: entry.plan.name, rows: runPlan(entry.plan, start).rows } : null;
+        if (!entry || !start) return null;
+        const result = runPlan(entry.plan, start, entry.plan.filing, undefined, 2);
+        return { name: entry.plan.name, rows: result.rows, result, plan: entry.plan };
       }),
     [book, start, slots],
   );
@@ -72,7 +84,7 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
   if (!book || !start || !portfolio) return <PageMessage />;
 
   const currency = portfolio.currency ?? 'EUR';
-  const present = runs.filter((r): r is ComparedRun => r !== null);
+  const present = runs.filter((r): r is ComparedRun & { plan: Plan } => r !== null);
   const common = present.length ? commonEndYear(present.map((r) => r.rows)) : 0;
   const metrics = runs.map((r) => (r ? planMetrics(r.rows, mode, common) : null));
   // With equal horizons the end is the common year: no separate end rows.
@@ -89,6 +101,60 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
     { label: 'Household expenses over the plan', value: (m) => m.spending, money: true, empty: '—' },
     { label: 'Cash runs out', value: (m) => m.cashRunsOut, money: false, empty: 'Never' },
   ];
+
+  // Goals of the compared plans, matched by id: a copy of a plan keeps its goals' ids.
+  const goalRows: GoalRow[] = [];
+  const seen = new Set<string>();
+  for (const r of present) {
+    for (const g of r.plan.goals) {
+      if (seen.has(g.id) || (g.kind === 'account' && !g.target)) continue;
+      seen.add(g.id);
+      const of = (run: ComparedRun & { plan: Plan }) => run.plan.goals.find((x) => x.id === g.id);
+      goalRows.push({
+        label: `${g.name}: ${g.kind === 'loan' ? 'repaid' : g.target?.kind === 'purchase' ? 'ready' : 'reached'}`,
+        text: (run) => {
+          const mine = of(run);
+          return mine ? (goalLabel(run.result, mine) ?? 'Not by the end') : '—';
+        },
+      });
+      if (g.kind !== 'loan') continue;
+      const dec = { year: Math.min(...present.map((x) => x.plan.startYear)) + 1, month: 12 };
+      goalRows.push({
+        label: `${g.name}: payment in ${formatMonth(dec.year, dec.month)}`,
+        money: (run) => {
+          const mine = of(run);
+          return mine ? loanPayment(run.result, mine, dec.year, dec.month) : null;
+        },
+      });
+      goalRows.push({
+        label: `${g.name}: interest paid`,
+        money: (run) => {
+          const mine = of(run);
+          return mine ? loanInterest(run.result, mine) : null;
+        },
+      });
+    }
+  }
+
+  function goalCell(row: GoalRow, slot: number) {
+    const run = runs[slot];
+    if (!run) return null;
+    if (row.text) return row.text(run);
+    const v = row.money!(run);
+    if (v === null) return '—';
+    const base = runs[0] ? row.money!(runs[0]) : null;
+    return (
+      <>
+        <div>{formatMoney(v, currency)}</div>
+        {slot > 0 && base !== null && (
+          <div className="text-muted-foreground text-xs">
+            {v > base ? '+' : ''}
+            {formatMoney(v - base, currency)} vs A
+          </div>
+        )}
+      </>
+    );
+  }
 
   function pick(slot: number, id: string) {
     const next = [...slots];
@@ -198,6 +264,16 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
                       {runs.map((_, i) => (
                         <TableCell key={i} className="text-right tabular-nums">
                           {cell(row, i)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                  {goalRows.map((row) => (
+                    <TableRow key={row.label}>
+                      <TableCell>{row.label}</TableCell>
+                      {runs.map((_, i) => (
+                        <TableCell key={i} className="text-right tabular-nums">
+                          {goalCell(row, i)}
                         </TableCell>
                       ))}
                     </TableRow>

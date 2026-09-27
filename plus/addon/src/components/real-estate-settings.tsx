@@ -32,7 +32,7 @@ import {
   type PropertyUse,
   type RealEstateSettings,
 } from '../model/properties';
-import { NumberInput, PercentInput } from './form-fields';
+import { MonthSelect, NumberInput, PercentInput } from './form-fields';
 
 interface Props {
   /** null — Wealthfolio before 3.9: no alternative assets in the addon API */
@@ -77,9 +77,9 @@ export function RealEstateSettingsTable({ alternatives, settings, people, curren
                 {people.length > 1 && <TableHead>Owner</TableHead>}
                 <TableHead>Valor catastral</TableHead>
                 <TableHead>Revised in 10 years</TableHead>
-                <TableHead>IBI a year</TableHead>
+                <TableHead>IBI a year, paid in</TableHead>
                 <TableHead>Comunidad a year</TableHead>
-                <TableHead>Insurance a year</TableHead>
+                <TableHead>Insurance a year, paid in</TableHead>
                 <TableHead>Building share, %</TableHead>
                 <TableHead>Purchase taxes & costs</TableHead>
               </TableRow>
@@ -146,8 +146,11 @@ export function RealEstateSettingsTable({ alternatives, settings, people, curren
                         onCheckedChange={(on) => setProperty(h, { catastroRevisado: on })}
                       />
                     </TableCell>
-                    <TableCell style={{ width: 110 }}>
-                      <NumberInput value={s.ibi} step={50} onChange={(v) => setProperty(h, { ibi: v ?? 0 })} />
+                    <TableCell style={{ width: 130 }}>
+                      <div className="space-y-1">
+                        <NumberInput value={s.ibi} step={50} onChange={(v) => setProperty(h, { ibi: v ?? 0 })} />
+                        <MonthSelect value={s.ibiMonth} noneLabel="Spread" onChange={(ibiMonth) => setProperty(h, { ibiMonth })} />
+                      </div>
                     </TableCell>
                     <TableCell style={{ width: 110 }}>
                       <NumberInput
@@ -156,12 +159,19 @@ export function RealEstateSettingsTable({ alternatives, settings, people, curren
                         onChange={(v) => setProperty(h, { community: v ?? undefined })}
                       />
                     </TableCell>
-                    <TableCell style={{ width: 110 }}>
-                      <NumberInput
-                        value={s.insurance ?? null}
-                        step={50}
-                        onChange={(v) => setProperty(h, { insurance: v ?? undefined })}
-                      />
+                    <TableCell style={{ width: 130 }}>
+                      <div className="space-y-1">
+                        <NumberInput
+                          value={s.insurance ?? null}
+                          step={50}
+                          onChange={(v) => setProperty(h, { insurance: v ?? undefined })}
+                        />
+                        <MonthSelect
+                          value={s.insuranceMonth}
+                          noneLabel="Spread"
+                          onChange={(insuranceMonth) => setProperty(h, { insuranceMonth })}
+                        />
+                      </div>
                     </TableCell>
                     <TableCell style={{ width: 100 }}>
                       <NumberInput

@@ -15,9 +15,16 @@ import type { Property } from '../engine/real-estate';
 import { rulesForYear } from '../es-tax';
 import { formatPercent } from '../lib/format';
 import type { Owner } from '../model/accounts';
-import { WITH_INFLATION, type Plan, type PropertyPurchase, type PropertySale, type Rental } from '../model/plan';
+import {
+  WITH_INFLATION,
+  type Plan,
+  type PropertyPurchase,
+  type PropertySale,
+  type PurchaseCosts,
+  type Rental,
+} from '../model/plan';
 import { AmountInput, GrowthInput } from './amount-input';
-import { Field, NumberInput, PercentInput } from './form-fields';
+import { Field, MonthSelect, NumberInput, PercentInput } from './form-fields';
 import { TimingInput } from './timing-input';
 
 interface Props {
@@ -53,6 +60,43 @@ function withRateType(m: Mortgage, t: RateType): Mortgage {
   if (t === 'fixed') return fixed;
   const diferencial = variable?.diferencial ?? 0.01;
   return { ...fixed, variable: { diferencial, fixedYears: t === 'variable' ? 0 : variable?.fixedYears || 10 } };
+}
+
+/** Notaría, registro, gestoría, tasación: none, a share of the price or an amount. */
+function PurchaseCostsInput({
+  value,
+  onChange,
+}: {
+  value: PurchaseCosts | undefined;
+  onChange: (c: PurchaseCosts | undefined) => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <div style={{ width: 90, flex: 'none' }}>
+        <Select
+          value={value?.kind ?? 'none'}
+          onValueChange={(k) =>
+            onChange(k === 'percent' ? { kind: 'percent', rate: 0.015 } : k === 'amount' ? { kind: 'amount', amount: 3_000 } : undefined)
+          }
+        >
+          <SelectTrigger style={{ minWidth: 0 }}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            <SelectItem value="percent">% of price</SelectItem>
+            <SelectItem value="amount">€</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {value?.kind === 'percent' && (
+        <PercentInput value={value.rate} onChange={(rate) => onChange({ kind: 'percent', rate })} />
+      )}
+      {value?.kind === 'amount' && (
+        <NumberInput value={value.amount} step={500} onChange={(v) => onChange({ kind: 'amount', amount: v ?? 0 })} />
+      )}
+    </div>
+  );
 }
 
 const newPurchase = (plan: Plan): PropertyPurchase => ({
@@ -142,7 +186,9 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
         <h3 className="font-medium">Purchases</h3>
         <p className="text-muted-foreground text-xs">
           Price in euros of the first year. On top of it: ITP for a second-hand home, IVA and AJD for a new one
-          (Comunitat Valenciana rates). The mortgage is paid as an annuity from the next year.
+          (Comunitat Valenciana rates), and the costs — notaría, registro, gestoría, tasación. The mortgage is paid as
+          an annuity from the month after the purchase; without a month the purchase is at the end of the year and the
+          mortgage is paid from the next one.
         </p>
         {draft.propertyPurchases.map((p, i) => (
           <div key={p.id} className="space-y-2 rounded-md border p-3">
@@ -151,7 +197,14 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
                 <Input value={p.name} onChange={(e) => setPurchase(i, { name: e.target.value })} />
               </Field>
               <Field label="When">
-                <TimingInput value={p.timing} plan={draft} onChange={(t) => t && setPurchase(i, { timing: t })} />
+                <div className="flex gap-2">
+                  <div className="min-w-0 flex-1">
+                    <TimingInput value={p.timing} plan={draft} onChange={(t) => t && setPurchase(i, { timing: t })} />
+                  </div>
+                  <div style={{ width: 110, flex: 'none' }}>
+                    <MonthSelect value={p.month} noneLabel="Year end" onChange={(month) => setPurchase(i, { month })} />
+                  </div>
+                </div>
               </Field>
               <Field label="Price">
                 <NumberInput value={p.price} step={5000} onChange={(v) => setPurchase(i, { price: v ?? 0 })} />
@@ -160,7 +213,17 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
                 variant="ghost"
                 size="icon"
                 aria-label="Remove purchase"
-                onClick={() => set({ propertyPurchases: draft.propertyPurchases.filter((_, j) => j !== i) })}
+                onClick={() =>
+                  set({
+                    propertyPurchases: draft.propertyPurchases.filter((_, j) => j !== i),
+                    // A goal saving for its down payment is left without a target.
+                    goals: draft.goals.map((g) =>
+                      g.kind === 'account' && g.target?.kind === 'purchase' && g.target.purchaseId === p.id
+                        ? { ...g, target: null }
+                        : g,
+                    ),
+                  })
+                }
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -220,6 +283,15 @@ export function RealEstateEditor({ draft, set, properties }: Props) {
               </Field>
               <Field label="Building share, % (if let)">
                 <PercentInput value={p.constructionShare ?? 0} onChange={(v) => setPurchase(i, { constructionShare: v })} />
+              </Field>
+              <Field label="IBI paid in">
+                <MonthSelect value={p.ibiMonth} onChange={(ibiMonth) => setPurchase(i, { ibiMonth })} />
+              </Field>
+              <Field label="Costs: notary, registry…">
+                <PurchaseCostsInput value={p.costs} onChange={(costs) => setPurchase(i, { costs })} />
+              </Field>
+              <Field label="Insurance paid in">
+                <MonthSelect value={p.insuranceMonth} onChange={(insuranceMonth) => setPurchase(i, { insuranceMonth })} />
               </Field>
             </div>
             {p.mortgage && (

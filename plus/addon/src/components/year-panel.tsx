@@ -66,6 +66,7 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
         ['Prepayment fees', row.realEstate.prepaymentFees],
         ['Property purchase', row.realEstate.purchaseCost],
         ['Purchase tax', row.realEstate.purchaseTax],
+        ['Purchase costs', row.realEstate.purchaseFees],
       ],
     ],
     [
@@ -108,6 +109,30 @@ function YearDetails({ row, plan, currency, mode }: { row: LedgerRow; plan: Plan
             The spending rule lets the accounts give {v(row.ruleWithdrawal)}; discretionary spending is what is left
             after essential expenses and taxes.
           </p>
+        )}
+        {row.sales.length > 0 && (
+          <section className="space-y-1">
+            <h3 className="text-muted-foreground text-xs font-medium">Taken from accounts</h3>
+            {row.sales.map((s, i) => (
+              <div key={i}>
+                <div className="flex justify-between gap-4">
+                  <span>
+                    {s.name}
+                    {s.reason === 'downPayment' && <span className="text-muted-foreground"> · down payment</span>}
+                  </span>
+                  <span className="tabular-nums">{v(s.proceeds)}</span>
+                </div>
+                {s.kind !== 'cash' && (
+                  <div className="text-muted-foreground flex justify-between gap-4 text-xs">
+                    <span>
+                      {s.kind === 'ppi' || s.kind === 'ppes' ? 'payout, taxed as trabajo' : `gain ${v(s.taxable)}`}
+                    </span>
+                    <span className="tabular-nums">IRPF {v(s.tax)}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </section>
         )}
         {groups.map(([title, items]) => (
           <section key={title} className="space-y-1">

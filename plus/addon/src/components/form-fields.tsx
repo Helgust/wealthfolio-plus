@@ -1,6 +1,7 @@
 // Form fields of the plan editor.
-import { Input, Label } from '@wealthfolio/ui';
+import { Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
 import type { ReactNode } from 'react';
+import { MONTH_NAMES } from '../lib/format';
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -27,6 +28,35 @@ export function NumberInput({
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
     />
+  );
+}
+
+const OVER_THE_YEAR = 'year';
+
+/** A month of the year (1 — January), or none: spread over the year. */
+export function MonthSelect({
+  value,
+  onChange,
+  noneLabel = 'Over the year',
+}: {
+  value: number | undefined;
+  onChange: (month: number | undefined) => void;
+  noneLabel?: string;
+}) {
+  return (
+    <Select value={value ? String(value) : OVER_THE_YEAR} onValueChange={(v) => onChange(v === OVER_THE_YEAR ? undefined : Number(v))}>
+      <SelectTrigger style={{ minWidth: 0 }}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={OVER_THE_YEAR}>{noneLabel}</SelectItem>
+        {MONTH_NAMES.map((name, i) => (
+          <SelectItem key={name} value={String(i + 1)}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

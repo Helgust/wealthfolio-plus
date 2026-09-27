@@ -149,6 +149,8 @@ export function buildStart(
         acquisitionValue: price + s.acquisitionCosts,
         ...(s.community ? { community: s.community } : {}),
         ...(s.insurance ? { insurance: s.insurance } : {}),
+        ...(s.ibiMonth ? { ibiMonth: s.ibiMonth } : {}),
+        ...(s.insuranceMonth ? { insuranceMonth: s.insuranceMonth } : {}),
         ...(s.constructionShare ? { constructionShare: s.constructionShare } : {}),
       },
     ];
