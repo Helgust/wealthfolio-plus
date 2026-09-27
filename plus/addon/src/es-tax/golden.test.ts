@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import golden from './fixtures/golden.json';
 import {
   actividad,
+  amortizacionInmueble,
+  cotizacionTrabajador,
   gananciaExentaVivienda,
   impuestoCompraVivienda,
   imputacionRenta,
@@ -12,6 +14,7 @@ import {
   loadIrpfRules,
   minimoConjunta,
   minimoPersonalFamiliar,
+  rendimientoArrendamiento,
   type Familiar,
   type IrpfOpts,
   type Persona,
@@ -114,6 +117,29 @@ describe('golden fixtures from the Python reference', () => {
       const { precio, nueva, habitual } = x.input;
       expect(diff(impuestoCompraVivienda(precio, { nueva, habitual }, r), x.expected)).toBeNull();
     }
+    for (const x of c.amortizacion) {
+      const [coste, vc, construccion] = x.input as [number, number | null, number];
+      expect(diff(amortizacionInmueble(coste, vc, construccion, r), x.expected)).toBeNull();
+    }
+    for (const chain of c.arrendamiento) {
+      let pendientes: number[] | null = null;
+      for (const ano of chain.anos) {
+        const i = ano.input;
+        const got = rendimientoArrendamiento(i.ingresos, r, {
+          financiacionReparacion: i.financiacion_reparacion,
+          otrosGastos: i.otros_gastos,
+          amortizacion: i.amortizacion,
+          reduccion: chain.reduccion as keyof typeof r.arrendamiento.reduccion,
+          pendientes,
+        });
+        expect(diff(got, ano.expected)).toBeNull();
+        pendientes = got.pendientes;
+      }
+    }
+  });
+
+  it.each(golden.cotizacion.map((c, i) => [i, c] as const))('cotizacion #%i', (_, c) => {
+    expect(diff(cotizacionTrabajador(c.salario, loadIrpfRules(c.year).cotizacion), c.expected)).toBeNull();
   });
 
   it.each(golden.irpf_conjunta.map((c, i) => [i, c] as const))('irpf_conjunta #%i', (_, c) => {

@@ -100,6 +100,7 @@ def irpf_anual(
     rendimiento_actividad=0.0,
     rendimientos_trabajo=0.0,
     trabajo_integro=0.0,
+    cotizaciones_trabajo=0.0,
     otras_rentas_general=0.0,
     rcm=0.0,
     ganancias=0.0,
@@ -118,9 +119,10 @@ def irpf_anual(
     dependiente=True it must be computed without gastos de difícil justificación.
     rendimientos_trabajo — rendimientos netos reducidos del trabajo, already after arts. 19–20
     (as in the tax return).
-    trabajo_integro — rendimientos íntegros del trabajo without Seguridad Social contributions:
-    pension plan payouts, pensions. Otros gastos (19.2.f) and reducción art. 20 are subtracted;
-    the art. 20 threshold uses only them, so do not mix with rendimientos_trabajo.
+    trabajo_integro — rendimientos íntegros del trabajo: salaries, pension plan payouts, pensions.
+    The employee's cotizaciones (19.2.a, cotizaciones_trabajo), otros gastos (19.2.f) and
+    reducción art. 20 are subtracted; the art. 20 threshold uses only them, so do not mix with
+    rendimientos_trabajo.
     otras_rentas_general — anything else in the general base (e.g. rendimiento inmobiliario).
     rcm, ganancias — savings base saldos for the year (may be < 0).
     deducciones — deducciones summed by half (estatal / autonómica), entered by the user.
@@ -142,6 +144,7 @@ def irpf_anual(
         rendimiento_actividad=rendimiento_actividad,
         rendimientos_trabajo=rendimientos_trabajo,
         trabajo_integro=trabajo_integro,
+        cotizaciones_trabajo=cotizaciones_trabajo,
         otras_rentas_general=otras_rentas_general,
         rcm=rcm,
         ganancias=ganancias,
@@ -163,6 +166,7 @@ class RentasMiembro:
     rendimiento_actividad: float = 0.0
     rendimientos_trabajo: float = 0.0
     trabajo_integro: float = 0.0
+    cotizaciones_trabajo: float = 0.0
     otras_rentas_general: float = 0.0
     rcm: float = 0.0
     ganancias: float = 0.0
@@ -209,7 +213,8 @@ def irpf_conjunta(
                 m.aportacion_pensiones_autonomo,
                 np.asarray(m.rendimiento_actividad, dtype=float)
                 + m.rendimientos_trabajo
-                + m.trabajo_integro,
+                + m.trabajo_integro
+                - m.cotizaciones_trabajo,
                 ps,
             )
             for m in miembros
@@ -221,6 +226,7 @@ def irpf_conjunta(
         rendimiento_actividad=total("rendimiento_actividad"),
         rendimientos_trabajo=total("rendimientos_trabajo"),
         trabajo_integro=total("trabajo_integro"),
+        cotizaciones_trabajo=total("cotizaciones_trabajo"),
         otras_rentas_general=total("otras_rentas_general"),
         rcm=total("rcm"),
         ganancias=total("ganancias"),
@@ -242,6 +248,7 @@ def _irpf(
     rendimiento_actividad,
     rendimientos_trabajo,
     trabajo_integro,
+    cotizaciones_trabajo,
     otras_rentas_general,
     rcm,
     ganancias,
@@ -269,7 +276,10 @@ def _irpf(
     # Art. 20 threshold — algebraic sum of other rentas, actividades before art. 32 reducciones
     # (Manual práctico 2025, cap. 3, fase 3).
     gastos_trab, red_trab, trabajo_reducido = rendimiento_trabajo(
-        trabajo_integro, rn + otras_rentas_general + rcm + ganancias, r.trabajo
+        trabajo_integro,
+        rn + otras_rentas_general + rcm + ganancias,
+        r.trabajo,
+        cotizaciones_trabajo,
     )
     trabajo = np.asarray(rendimientos_trabajo, dtype=float) + trabajo_reducido
     otras_rentas = (

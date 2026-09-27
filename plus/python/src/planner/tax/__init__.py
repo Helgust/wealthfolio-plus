@@ -12,10 +12,15 @@ from planner.tax.compensacion import (
     compensar_base_liquidable_general,
     pendientes_vacios,
 )
+from planner.tax.cotizacion import cotizacion_trabajador
 from planner.tax.inmuebles import (
+    REDUCCIONES_ARRENDAMIENTO,
+    Arrendamiento,
+    amortizacion_inmueble,
     ganancia_exenta_vivienda,
     impuesto_compra_vivienda,
     imputacion_renta,
+    rendimiento_arrendamiento,
 )
 from planner.tax.irpf import (
     IrpfAnual,
@@ -40,6 +45,7 @@ from planner.tax.reducciones import (
 )
 from planner.tax.rules import (
     ActividadRules,
+    CotizacionRules,
     Inmuebles,
     IrpfRules,
     RetaRules,
@@ -51,11 +57,14 @@ from planner.tax.rules import (
 from planner.tax.scale import Bracket, Scale, load_scale
 
 __all__ = [
+    "REDUCCIONES_ARRENDAMIENTO",
     "Actividad",
     "ActividadRules",
+    "Arrendamiento",
     "BaseAhorro",
     "BaseGeneral",
     "Bracket",
+    "CotizacionRules",
     "Discapacidad",
     "Familiar",
     "Inmuebles",
@@ -68,9 +77,11 @@ __all__ = [
     "RetaTramo",
     "Scale",
     "actividad",
+    "amortizacion_inmueble",
     "available_years",
     "base_imponible_ahorro",
     "compensar_base_liquidable_general",
+    "cotizacion_trabajador",
     "cuota_integra",
     "cuota_integra_mitad",
     "ganancia_exenta_vivienda",
@@ -86,6 +97,7 @@ __all__ = [
     "pendientes_vacios",
     "reduccion_actividad",
     "reduccion_prevision_social",
+    "rendimiento_arrendamiento",
     "rendimiento_neto",
     "rendimiento_trabajo",
     "reta_tramo",

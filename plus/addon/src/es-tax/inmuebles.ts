@@ -1,4 +1,5 @@
-// Port of planner.tax.inmuebles: real estate in IRPF and the taxes on buying a home.
+// Port of planner.tax.inmuebles: real estate in IRPF — imputación, rentals, the vivienda habitual
+// exemptions — and the taxes on buying a home.
 import type { Inmuebles } from './rules';
 
 /**
@@ -54,4 +55,77 @@ export function impuestoCompraVivienda(
   if (nueva) return precio * (rules.iva_vivienda + (habitual ? rules.ajd.vivienda_habitual : rules.ajd.general));
   const itp = rules.itp;
   return precio * (precio > itp.alto_valor_desde ? itp.alto_valor : itp.general);
+}
+
+/** Reducción of art. 23.2 LIRPF (and DT 38ª for contracts before Ley 12/2023). */
+export type ReduccionArrendamiento = keyof Inmuebles['arrendamiento']['reduccion'];
+
+/**
+ * Amortización of a rented home for a year (art. 23.1.b LIRPF): a share of the greater of the
+ * acquisition cost and the valor catastral, without the land. construccion — share of the building
+ * in the valor catastral (IBI receipt), applied to both values.
+ */
+export function amortizacionInmueble(
+  costeAdquisicion: number,
+  valorCatastral: number | null,
+  construccion: number,
+  rules: Inmuebles,
+): number {
+  return Math.max(costeAdquisicion, valorCatastral ?? 0) * construccion * rules.arrendamiento.amortizacion;
+}
+
+/** Rendimiento del capital inmobiliario of one home let for a year. */
+export interface Arrendamiento {
+  ingresos: number;
+  /** Interest and repairs deducted, prior years' first */
+  financiacion_reparacion: number;
+  otros_gastos: number;
+  amortizacion: number;
+  rendimiento_neto: number;
+  reduccion: number;
+  rendimiento_neto_reducido: number;
+  /** Not yet deducted, by year of origin, oldest first */
+  pendientes: number[];
+}
+
+/**
+ * Rendimiento neto reducido from letting a home (arts. 22–23 LIRPF). financiacionReparacion —
+ * interest, financing costs, repairs and maintenance: with prior years' excess (the oldest first)
+ * they are deducted up to the ingresos (23.1.a.1º). otrosGastos — IBI, comunidad, insurance: no
+ * limit. The reducción applies to a positive rendimiento only. pendientes — last year's state.
+ */
+export function rendimientoArrendamiento(
+  ingresos: number,
+  rules: Inmuebles,
+  {
+    financiacionReparacion = 0,
+    otrosGastos = 0,
+    amortizacion = 0,
+    reduccion = 'general' as ReduccionArrendamiento,
+    pendientes = null as number[] | null,
+  } = {},
+): Arrendamiento {
+  const a = rules.arrendamiento;
+  const previos = pendientes ?? new Array<number>(a.anos_exceso).fill(0);
+  let limite = Math.max(ingresos, 0);
+  const restantes = previos.map((p) => {
+    const usado = Math.min(p, limite);
+    limite -= usado;
+    return p - usado;
+  });
+  const delAno = Math.min(financiacionReparacion, limite);
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+  const deducido = sum(previos) - sum(restantes) + delAno;
+  const rn = ingresos - deducido - otrosGastos - amortizacion;
+  const red = a.reduccion[reduccion] * Math.max(rn, 0);
+  return {
+    ingresos,
+    financiacion_reparacion: deducido,
+    otros_gastos: otrosGastos,
+    amortizacion,
+    rendimiento_neto: rn,
+    reduccion: red,
+    rendimiento_neto_reducido: rn - red,
+    pendientes: [...restantes.slice(1), financiacionReparacion - delAno],
+  };
 }

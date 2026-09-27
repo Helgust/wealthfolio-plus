@@ -98,11 +98,12 @@ class ActividadRules(_Frozen):
     """Rendimiento neto de actividades económicas, estimación directa simplificada."""
 
     gastos_dificil_justificacion: GastosDificilJustificacion
+    pago_fraccionado: float  # modelo 130: share of the rendimiento neto paid during the year
 
     def indexed(self, f: float) -> ActividadRules:
         g = self.gastos_dificil_justificacion
-        return ActividadRules(
-            gastos_dificil_justificacion=g.model_copy(update={"limit": g.limit * f})
+        return self.model_copy(
+            update={"gastos_dificil_justificacion": g.model_copy(update={"limit": g.limit * f})}
         )
 
 
@@ -171,6 +172,42 @@ class RetaRules(_Frozen):
                 ],
             }
         )
+
+
+class CotizacionTipos(_Frozen):
+    contingencias_comunes: float
+    mei: float
+    desempleo: float
+    formacion_profesional: float
+
+    @property
+    def total(self) -> float:
+        return sum(self.model_dump().values())
+
+
+class TramoSolidaridad(_Frozen):
+    hasta: float | None  # upper bound as a multiple of tope_maximo; None — unbounded
+    tipo: float
+
+
+class CotizacionRules(_Frozen):
+    """Employee's share of the Régimen General cotizaciones (art. 19.2.a LIRPF gastos)."""
+
+    tope_maximo: float  # euros per month
+    tipos: CotizacionTipos
+    solidaridad: list[TramoSolidaridad]  # ascending; above the tope
+
+    @model_validator(mode="after")
+    def _check_solidaridad(self) -> CotizacionRules:
+        hastas = [t.hasta for t in self.solidaridad]
+        if hastas[-1] is not None or None in hastas[:-1]:
+            raise ValueError("only the last solidaridad tramo may have no upper bound")
+        if any(a >= b for a, b in pairwise([1.0, *hastas[:-1]])):
+            raise ValueError("solidaridad bounds must be increasing and above 1")
+        return self
+
+    def indexed(self, f: float) -> CotizacionRules:
+        return _scaled(self, f, "tope_maximo")
 
 
 def _scaled(m: _Frozen, f: float, *fields: str) -> _Frozen:
@@ -342,12 +379,32 @@ class Ajd(_Frozen):
     general: float
 
 
+class ReduccionArrendamiento(_Frozen):
+    """Art. 23.2 LIRPF and DT 38ª: shares of the positive rendimiento neto of a home let."""
+
+    rebaja_tensionada: float
+    joven_o_social: float
+    rehabilitacion: float
+    general: float
+    anterior_2023: float
+
+
+class ArrendamientoRules(_Frozen):
+    """Rendimientos del capital inmobiliario from letting a home (arts. 22–23 LIRPF)."""
+
+    amortizacion: float  # share of the greater of acquisition cost and valor catastral, no land
+    anos_exceso: int  # years the excess of interest and repairs over the rent carries forward
+    reduccion: ReduccionArrendamiento
+
+
 class Inmuebles(_Frozen):
-    """Real estate rules: IRPF imputación and exemptions, taxes on buying a home."""
+    """Real estate rules: IRPF imputación, rentals and exemptions, taxes on buying a home."""
 
     imputacion: Imputacion
     reinversion: Reinversion
     exencion_mayores: ExencionMayores
+    habitual_hasta_anos: int  # a sold home was the vivienda habitual this long before (41 bis.3)
+    arrendamiento: ArrendamientoRules
     itp: Itp
     iva_vivienda: float
     ajd: Ajd
@@ -357,8 +414,8 @@ class Inmuebles(_Frozen):
 
 
 class IrpfRules(_Frozen):
-    """All tax rules of a year: IRPF (two halves, mínimos, actividad, reducciones), RETA and real
-    estate."""
+    """All tax rules of a year: IRPF (two halves, mínimos, actividad, reducciones), RETA, employee
+    cotizaciones and real estate."""
 
     year: int  # year the rules come from (not necessarily the tax year)
     estatal: IrpfHalf
@@ -367,6 +424,7 @@ class IrpfRules(_Frozen):
     actividad: ActividadRules
     reducciones: Reducciones
     reta: RetaRules
+    cotizacion: CotizacionRules
     inmuebles: Inmuebles
 
     def indexed(self, f: float) -> IrpfRules:
@@ -382,6 +440,7 @@ class IrpfRules(_Frozen):
             actividad=self.actividad.indexed(f),
             reducciones=self.reducciones.indexed(f),
             reta=self.reta.indexed(f),
+            cotizacion=self.cotizacion.indexed(f),
             inmuebles=self.inmuebles.indexed(f),
         )
 
@@ -411,6 +470,7 @@ def load_irpf_rules(year: int) -> IrpfRules:
         actividad=load_rules(year, "actividad")["estimacion_directa_simplificada"],
         reducciones=load_rules(year, "reducciones"),
         reta=load_rules(year, "reta"),
+        cotizacion=load_rules(year, "cotizacion"),
         inmuebles=load_rules(year, "inmuebles"),
     )
 

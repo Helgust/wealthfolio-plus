@@ -1,8 +1,8 @@
 """Export for the TypeScript addon: rules by year as JSON and golden fixtures.
 
 Rules stay in rules/<year>/*.yaml; the JSON is their pydantic-validated copy for the addon.
-Fixtures are inputs and results of `actividad`, `minimo_*`, `irpf_anual`, `irpf_conjunta` on a
-grid: the TS port must match them to 0.01 €.
+Fixtures are inputs and results of `actividad`, `minimo_*`, `irpf_anual`, `irpf_conjunta`,
+`cotizacion_trabajador` on a grid: the TS port must match them to 0.01 €.
 
 Run from plus/python: .venv\\Scripts\\python -m planner.export_ts
 tests/test_export_ts.py fails if the export is stale.
@@ -18,13 +18,16 @@ from pathlib import Path
 import numpy as np
 
 from planner.tax import (
+    REDUCCIONES_ARRENDAMIENTO,
     Discapacidad,
     Familiar,
     Mitades,
     Persona,
     RentasMiembro,
     actividad,
+    amortizacion_inmueble,
     available_years,
+    cotizacion_trabajador,
     ganancia_exenta_vivienda,
     impuesto_compra_vivienda,
     imputacion_renta,
@@ -33,6 +36,7 @@ from planner.tax import (
     load_irpf_rules,
     minimo_conjunta,
     minimo_personal_familiar,
+    rendimiento_arrendamiento,
 )
 
 ADDON_TAX_DIR = Path(__file__).resolve().parents[3] / "addon" / "src" / "es-tax"
@@ -179,6 +183,30 @@ def _individual_cases(year: int, rules) -> list[dict]:
                 "expected": _irpf_out(res),
             }
         )
+    # Salaries: the employee's cotizaciones (19.2.a) before 19.2.f and art. 20, and the 30 % limit.
+    conts = [Persona(edad=40)]
+    minimo = minimo_personal_familiar(conts[0], rules)
+    for salario, rn, (rcm, gan) in product(
+        (8_000.0, 16_000.0, 19_000.0, 22_000.0, 35_000.0, 90_000.0), (0.0, 3_000.0), AHORRO
+    ):
+        kwargs = {
+            "trabajo_integro": salario,
+            "cotizaciones_trabajo": cotizacion_trabajador(salario, rules.cotizacion),
+            "rendimiento_actividad": rn,
+            "rcm": rcm,
+            "ganancias": gan,
+            "aportacion_pensiones": 1_500.0,
+        }
+        res = irpf_anual(rules, minimo, **kwargs)
+        cases.append(
+            {
+                "year": year,
+                "hogar": "solo_40",
+                "hogar_input": _hogar_json(conts, [], []),
+                "input": kwargs,
+                "expected": _irpf_out(res),
+            }
+        )
     # Special modes: dependiente, inicio_actividad, deducciones.
     minimo = minimo_personal_familiar(Persona(edad=40), rules)
     for rn, flags in product(
@@ -236,6 +264,7 @@ def _conjunta_cases(year: int, rules) -> list[dict]:
         AHORRO,
     ):
         minimo = minimo_conjunta(conyuges, rules, desc, asc)
+        salario = 18_000.0 if ing1 == 35_000 else 0.0
         miembros = [
             RentasMiembro(
                 rendimiento_actividad=actividad(ing1, ing1 * 0.3, rules).rendimiento_neto,
@@ -246,7 +275,8 @@ def _conjunta_cases(year: int, rules) -> list[dict]:
             RentasMiembro(
                 rendimiento_actividad=actividad(ing2, ing2 * 0.3, rules).rendimiento_neto,
                 aportacion_pensiones_autonomo=4_000.0,
-                trabajo_integro=9_000.0 if ing2 == 0 else 0.0,
+                trabajo_integro=(9_000.0 if ing2 == 0 else 0.0) + salario,
+                cotizaciones_trabajo=cotizacion_trabajador(salario, rules.cotizacion),
             ),
         ]
         res = irpf_conjunta(rules, minimo, miembros)
@@ -270,6 +300,17 @@ def _indexed_cases(year: int, rules) -> list[dict]:
     return [
         {"year": year, "factor": f, "expected": rules.indexed(f).model_dump(mode="json")}
         for f in INDEX_FACTORS
+    ]
+
+
+SALARIOS = [0.0, 15_000.0, 30_000.0, 61_214.4, 70_000.0, 100_000.0, 200_000.0]
+
+
+def _cotizacion_cases(year: int, rules) -> list[dict]:
+    """The employee's cotizaciones on a grid of salaries, across the tope and solidaridad tramos."""
+    return [
+        {"year": year, "salario": s, "expected": cotizacion_trabajador(s, rules.cotizacion)}
+        for s in SALARIOS
     ]
 
 
@@ -305,7 +346,57 @@ def _inmuebles_cases(year: int, rules) -> list[dict]:
         }
         for p, n, h in product((200_000.0, 1_500_000.0), (False, True), (False, True))
     ]
-    return [{"year": year, "imputacion": imputacion, "exenta": exenta, "compra": compra}]
+    amortizacion = [
+        {"input": args, "expected": amortizacion_inmueble(*args, r)}
+        for args in product((150_000.0, 300_000.0), (None, 200_000.0), (0.4, 0.7))
+    ]
+    # Years of one rental in a row: the excess of interest and repairs carries forward and expires.
+    anos = [
+        (12_000.0, 3_000.0, 1_500.0, 2_000.0),
+        (3_000.0, 5_000.0, 800.0, 2_000.0),
+        (0.0, 2_500.0, 800.0, 2_000.0),
+        (4_000.0, 1_000.0, 800.0, 2_000.0),
+        (0.0, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0, 0.0),
+        (20_000.0, 1_000.0, 1_000.0, 2_000.0),
+    ]
+    arrendamiento = []
+    for clave in REDUCCIONES_ARRENDAMIENTO:
+        pendientes = None
+        cadena = []
+        for ingresos, fin, otros, amort in anos:
+            a = rendimiento_arrendamiento(
+                ingresos,
+                r,
+                financiacion_reparacion=fin,
+                otros_gastos=otros,
+                amortizacion=amort,
+                reduccion=clave,
+                pendientes=pendientes,
+            )
+            pendientes = a.pendientes
+            cadena.append(
+                {
+                    "input": {
+                        "ingresos": ingresos,
+                        "financiacion_reparacion": fin,
+                        "otros_gastos": otros,
+                        "amortizacion": amort,
+                    },
+                    "expected": asdict(a),
+                }
+            )
+        arrendamiento.append({"reduccion": clave, "anos": cadena})
+    return [
+        {
+            "year": year,
+            "imputacion": imputacion,
+            "exenta": exenta,
+            "compra": compra,
+            "amortizacion": amortizacion,
+            "arrendamiento": arrendamiento,
+        }
+    ]
 
 
 def fixtures() -> dict:
@@ -316,6 +407,7 @@ def fixtures() -> dict:
         "irpf_conjunta": [],
         "rules_indexed": [],
         "inmuebles": [],
+        "cotizacion": [],
     }
     for year in available_years():
         rules = load_irpf_rules(year)
@@ -325,6 +417,7 @@ def fixtures() -> dict:
         out["irpf_conjunta"] += _conjunta_cases(year, rules)
         out["rules_indexed"] += _indexed_cases(year, rules)
         out["inmuebles"] += _inmuebles_cases(year, rules)
+        out["cotizacion"] += _cotizacion_cases(year, rules)
     return out
 
 

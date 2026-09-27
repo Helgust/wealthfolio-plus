@@ -4,9 +4,11 @@ import pytest
 
 from planner.tax import load_irpf_rules
 from planner.tax.inmuebles import (
+    amortizacion_inmueble,
     ganancia_exenta_vivienda,
     impuesto_compra_vivienda,
     imputacion_renta,
+    rendimiento_arrendamiento,
 )
 
 R25 = load_irpf_rules(2025).inmuebles
@@ -78,3 +80,58 @@ def test_indexing_scales_only_the_itp_threshold():
     assert ix.itp.alto_valor_desde == pytest.approx(1_100_000)
     assert ix.itp.general == R26.itp.general
     assert ix.imputacion == R26.imputacion
+
+
+class TestArrendamiento:
+    def test_amortizacion_three_percent_of_the_greater_value_without_land(self):
+        assert amortizacion_inmueble(200_000, 120_000, 0.6, R26) == pytest.approx(3_600)
+        assert amortizacion_inmueble(100_000, 150_000, 0.5, R26) == pytest.approx(2_250)
+        assert amortizacion_inmueble(100_000, None, 0.5, R26) == pytest.approx(1_500)
+
+    def test_rendimiento_and_the_general_reduccion(self):
+        a = rendimiento_arrendamiento(
+            12_000, R26, financiacion_reparacion=3_000, otros_gastos=1_500, amortizacion=2_000
+        )
+        assert a.rendimiento_neto == pytest.approx(5_500)
+        assert a.reduccion == pytest.approx(2_750)
+        assert a.rendimiento_neto_reducido == pytest.approx(2_750)
+
+    @pytest.mark.parametrize(
+        ("clave", "share"),
+        [
+            ("rebaja_tensionada", 0.9),
+            ("joven_o_social", 0.7),
+            ("rehabilitacion", 0.6),
+            ("general", 0.5),
+            ("anterior_2023", 0.6),
+        ],
+    )
+    def test_reducciones(self, clave, share):
+        a = rendimiento_arrendamiento(10_000, R26, reduccion=clave)
+        assert a.reduccion == pytest.approx(10_000 * share)
+
+    def test_no_reduccion_on_a_loss(self):
+        a = rendimiento_arrendamiento(5_000, R26, otros_gastos=4_000, amortizacion=3_000)
+        assert a.rendimiento_neto == pytest.approx(-2_000)
+        assert a.reduccion == 0
+
+    def test_interest_and_repairs_up_to_the_rent_and_the_excess_carries_forward(self):
+        a = rendimiento_arrendamiento(4_000, R26, financiacion_reparacion=6_000, otros_gastos=1_000)
+        assert a.financiacion_reparacion == pytest.approx(4_000)
+        assert a.rendimiento_neto == pytest.approx(-1_000)  # other gastos are not limited
+        assert a.pendientes == [0, 0, 0, pytest.approx(2_000)]
+        # Next year: last year's excess first, then this year's, together up to the rent.
+        b = rendimiento_arrendamiento(
+            4_000, R26, financiacion_reparacion=3_000, pendientes=a.pendientes
+        )
+        assert b.financiacion_reparacion == pytest.approx(4_000)
+        assert b.pendientes == [0, 0, 0, pytest.approx(1_000)]
+
+    def test_the_excess_expires_after_four_years(self):
+        p = rendimiento_arrendamiento(0, R26, financiacion_reparacion=1_000).pendientes
+        for _ in range(4):
+            p = rendimiento_arrendamiento(0, R26, pendientes=p).pendientes
+        assert sum(p) == 0
+
+    def test_a_sold_home_rented_out_before_counts_as_habitual_for_two_years(self):
+        assert R26.habitual_hasta_anos == 2

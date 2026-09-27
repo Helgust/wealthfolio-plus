@@ -1,5 +1,5 @@
-"""General base reducciones: rendimientos del trabajo (arts. 19.2.f, 20), actividades (art. 32),
-pension plans (arts. 51–52).
+"""General base reducciones: rendimientos del trabajo (arts. 19.2.a, 19.2.f, 20), actividades
+(art. 32), pension plans (arts. 51–52).
 
 Arguments are numbers or numpy arrays of the same shape (trajectories).
 """
@@ -21,32 +21,34 @@ def _tramo_decreciente(x, plano_hasta: float, importe: float, pendiente: float):
     return np.clip(importe - pendiente * np.maximum(x - plano_hasta, 0.0), 0.0, importe)
 
 
-def rendimiento_trabajo(integro, otras_rentas, rules: Trabajo):
-    """Rendimiento neto reducido del trabajo without Seguridad Social contributions (pension
-    plan payouts, pensions): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20).
+def rendimiento_trabajo(integro, otras_rentas, rules: Trabajo, cotizaciones=0.0):
+    """Rendimiento neto reducido del trabajo: íntegro − the employee's Seguridad Social
+    cotizaciones (art. 19.2.a) − otros gastos (art. 19.2.f) − reducción (art. 20).
 
-    otras_rentas — algebraic sum of other rentas no exentas (for the art. 20 threshold).
-    Returns (otros_gastos, reduccion, neto_reducido). Gastos 19.2.a–e are zero for this income,
-    so the rendimiento for the art. 20 thresholds equals the íntegro.
+    integro — salaries, pensions, pension plan payouts; cotizaciones — those of the salaries
+    (`cotizacion_trabajador`), zero for pensions and payouts. otras_rentas — algebraic sum of other
+    rentas no exentas (for the art. 20 threshold).
+    Returns (otros_gastos, reduccion, neto_reducido). Otros gastos are capped at the rendimiento
+    after the cotizaciones, and the art. 20 thresholds use that rendimiento, without 19.2.f.
     """
-    integro = np.asarray(integro, dtype=float)
+    previo = np.asarray(integro, dtype=float) - np.asarray(cotizaciones, dtype=float)
     otras = np.asarray(otras_rentas, dtype=float)
-    positivo = np.maximum(integro, 0.0)
+    positivo = np.maximum(previo, 0.0)
     gastos = np.minimum(rules.otros_gastos, positivo)
     r = rules.reduccion
     red = np.where(
-        integro <= r.plano_hasta,
+        previo <= r.plano_hasta,
         r.importe,
         np.where(
-            integro <= r.quiebra,
-            r.importe - r.pendiente * (integro - r.plano_hasta),
-            r.importe_quiebra - r.pendiente_quiebra * (integro - r.quiebra),
+            previo <= r.quiebra,
+            r.importe - r.pendiente * (previo - r.plano_hasta),
+            r.importe_quiebra - r.pendiente_quiebra * (previo - r.quiebra),
         ),
     )
-    red = np.where((integro < r.rend_max) & (otras <= r.otras_rentas_max), red, 0.0)
+    red = np.where((previo < r.rend_max) & (otras <= r.otras_rentas_max), red, 0.0)
     # Art. 20: the saldo after the reducción cannot be negative.
     red = np.clip(red, 0.0, positivo - gastos)
-    return _out(gastos), _out(red), _out(integro - gastos - red)
+    return _out(gastos), _out(red), _out(previo - gastos - red)
 
 
 def reduccion_actividad(

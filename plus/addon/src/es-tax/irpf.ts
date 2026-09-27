@@ -74,10 +74,12 @@ export interface Rentas {
   /** Rendimientos netos reducidos del trabajo — already after arts. 19–20, as in the tax return */
   rendimientos_trabajo?: number;
   /**
-   * Rendimientos íntegros del trabajo without Seguridad Social contributions: pension plan payouts,
-   * pensions. 19.2.f and art. 20 apply to them; do not mix with rendimientos_trabajo.
+   * Rendimientos íntegros del trabajo: salaries, pension plan payouts, pensions. The employee's
+   * cotizaciones (19.2.a), 19.2.f and art. 20 apply to them; do not mix with rendimientos_trabajo.
    */
   trabajo_integro?: number;
+  /** The employee's Seguridad Social cotizaciones on the salaries in trabajo_integro */
+  cotizaciones_trabajo?: number;
   otras_rentas_general?: number;
   rcm?: number; // saldo, may be < 0
   ganancias?: number; // saldo, may be < 0
@@ -129,6 +131,7 @@ export function irpfConjunta(
     rendimiento_actividad: suma('rendimiento_actividad'),
     rendimientos_trabajo: suma('rendimientos_trabajo'),
     trabajo_integro: suma('trabajo_integro'),
+    cotizaciones_trabajo: suma('cotizaciones_trabajo'),
     otras_rentas_general: suma('otras_rentas_general'),
     rcm: suma('rcm'),
     ganancias: suma('ganancias'),
@@ -143,7 +146,10 @@ export function irpfConjunta(
         reduccionPrevisionSocial(
           m.aportacion_pensiones ?? 0,
           m.aportacion_pensiones_autonomo ?? 0,
-          (m.rendimiento_actividad ?? 0) + (m.rendimientos_trabajo ?? 0) + (m.trabajo_integro ?? 0),
+          (m.rendimiento_actividad ?? 0) +
+            (m.rendimientos_trabajo ?? 0) +
+            (m.trabajo_integro ?? 0) -
+            (m.cotizaciones_trabajo ?? 0),
           ps,
         ),
       0,
@@ -175,6 +181,7 @@ function irpf(
     rentas.trabajo_integro ?? 0,
     rn + otrasGeneral + rcm + ganancias,
     r.trabajo,
+    rentas.cotizaciones_trabajo ?? 0,
   );
   const trabajo = (rentas.rendimientos_trabajo ?? 0) + trab.neto_reducido;
   const otrasRentas =

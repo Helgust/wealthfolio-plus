@@ -45,3 +45,30 @@ iva_vivienda: 0.10
 ajd:
   vivienda_habitual: 0.001
   general: 0.014
+
+# Art. 41 bis.3 RIRPF (RD 960/2013): for the exemptions of arts. 33.4.b and 38.1 LIRPF the home sold is
+# the vivienda habitual if it is one at the sale or was one until any day of the two years before it
+# (a home rented out before the sale).
+habitual_hasta_anos: 2
+
+# Rendimientos del capital inmobiliario from renting out a home (arts. 22–23 LIRPF; consolidated text
+# BOE-A-2006-20764 as of 09.09.2026).
+arrendamiento:
+  # 23.1.b: amortización of the building — up to 3 % of the greater of the acquisition cost and the
+  # valor catastral, without the value of the land. Furniture and other goods let with it — not modelled.
+  amortizacion: 0.03
+  # 23.1.a.1º: interest and other financing costs plus repairs and maintenance, per property, up to the
+  # rendimientos íntegros; the excess is deducted in the next anos_exceso years with the same limit.
+  anos_exceso: 4
+  # 23.2 as worded by Ley 12/2023 (disposición final 2.1; contracts from 26.05.2023, in force from
+  # 2024): reducción of the positive rendimiento neto of a home let as a dwelling. The requirements must
+  # hold when the contract is signed.
+  reduccion:
+    rebaja_tensionada: 0.90   # 23.2.a: zona tensionada, new contract with the initial rent cut > 5 %
+    joven_o_social: 0.70      # 23.2.b: first rental in a zona tensionada to tenants aged 18–35, or to a
+                              # public administration / non-profit for social rent
+    rehabilitacion: 0.60      # 23.2.c: rehabilitation (art. 41.1 RIRPF) finished in the two years before
+    general: 0.50             # 23.2.d: any other case
+    # DT 38ª LIRPF: contracts signed before Ley 12/2023 keep art. 23.2 as worded on 31.12.2021 —
+    # 60 % (Ley 11/2021, art. 3.2, BOE-A-2021-11473; 60 % since Ley 26/2014).
+    anterior_2023: 0.60

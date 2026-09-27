@@ -1,4 +1,4 @@
-// Port of planner.tax.reducciones: general base reducciones (arts. 19.2.f, 20, 32, 51–52 LIRPF).
+// Port of planner.tax.reducciones: general base reducciones (arts. 19.2.a, 19.2.f, 20, 32, 51–52 LIRPF).
 import type { Discapacidad } from './minimos';
 import type { PrevisionSocial, ReduccionesActividad, Trabajo, TramoDecreciente } from './rules';
 
@@ -16,28 +16,32 @@ export interface RendimientoTrabajo {
 }
 
 /**
- * Rendimiento neto reducido del trabajo without Seguridad Social contributions (pension plan
- * payouts, pensions): íntegro − otros gastos (art. 19.2.f) − reducción (art. 20). otrasRentas —
- * algebraic sum of other rentas no exentas (art. 20 threshold).
+ * Rendimiento neto reducido del trabajo: íntegro − the employee's cotizaciones (art. 19.2.a) − otros
+ * gastos (art. 19.2.f) − reducción (art. 20). integro — salaries, pensions, pension plan payouts;
+ * cotizaciones — those of the salaries. otrasRentas — algebraic sum of other rentas no exentas
+ * (art. 20 threshold). Otros gastos are capped at the rendimiento after the cotizaciones, and the
+ * art. 20 thresholds use that rendimiento, without 19.2.f.
  */
 export function rendimientoTrabajo(
   integro: number,
   otrasRentas: number,
   rules: Trabajo,
+  cotizaciones = 0,
 ): RendimientoTrabajo {
-  const positivo = Math.max(integro, 0);
+  const previo = integro - cotizaciones;
+  const positivo = Math.max(previo, 0);
   const gastos = Math.min(rules.otros_gastos, positivo);
   const r = rules.reduccion;
   let red =
-    integro <= r.plano_hasta
+    previo <= r.plano_hasta
       ? r.importe
-      : integro <= r.quiebra
-        ? r.importe - r.pendiente * (integro - r.plano_hasta)
-        : r.importe_quiebra - r.pendiente_quiebra * (integro - r.quiebra);
-  if (!(integro < r.rend_max && otrasRentas <= r.otras_rentas_max)) red = 0;
+      : previo <= r.quiebra
+        ? r.importe - r.pendiente * (previo - r.plano_hasta)
+        : r.importe_quiebra - r.pendiente_quiebra * (previo - r.quiebra);
+  if (!(previo < r.rend_max && otrasRentas <= r.otras_rentas_max)) red = 0;
   // Art. 20: the saldo after the reducción cannot be negative.
   red = clip(red, 0, positivo - gastos);
-  return { otros_gastos: gastos, reduccion: red, neto_reducido: integro - gastos - red };
+  return { otros_gastos: gastos, reduccion: red, neto_reducido: previo - gastos - red };
 }
 
 export interface ReduccionActividadOpts {

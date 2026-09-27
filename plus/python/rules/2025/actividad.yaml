@@ -8,3 +8,9 @@ estimacion_directa_simplificada:
   gastos_dificil_justificacion:
     rate: 0.05
     limit: 2000
+  # Pago fraccionado (modelo 130) in estimación directa: 20 % of the rendimiento neto from 1 January to
+  # the end of each quarter, less the earlier ones — for the year, 20 % of its rendimiento neto
+  # (art. 110.1.a RIRPF; consolidated BOE text BOE-A-2007-6820, checked 27.09.2026). Not modelled: the
+  # retenciones on a professional's invoices (110.3.a) and the deducción for a rendimiento of the year
+  # before up to 12 000 € (110.3.c).
+  pago_fraccionado: 0.20
