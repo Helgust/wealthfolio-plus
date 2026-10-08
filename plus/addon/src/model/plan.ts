@@ -171,7 +171,7 @@ const share = z.number().finite().min(0).max(1);
 
 /**
  * How much the household spends once the rule starts. The rule sets how much the portfolio (all
- * modelled accounts) gives per year; discretionary spending is what the income and that
+ * modelled accounts; pension plans from the access age) gives per year; discretionary spending is what the income and that
  * withdrawal leave after essential expenses and taxes, and replaces the planned discretionary
  * expenses. Essential expenses are always paid: they are the floor.
  * planned — no rule, the expense list as is; percent — rate × the start-of-year portfolio;
