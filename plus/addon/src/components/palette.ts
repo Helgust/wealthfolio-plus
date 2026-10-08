@@ -14,3 +14,8 @@ export const PURPLE = { light: '#7462b8', dark: '#8f7ed2' };
  * themes; next to forest it does not.
  */
 export const STONE = { light: '#5c574d', dark: '#c4bfb2' };
+
+/** Axes and reference lines as on the host's own charts (the retirement planner): no grid. */
+export const MUTED = 'var(--muted-foreground)';
+export const REFERENCE = 'color-mix(in srgb, var(--muted-foreground) 58%, transparent)';
+export const AXIS_TICK = { fontSize: 10, fill: MUTED };

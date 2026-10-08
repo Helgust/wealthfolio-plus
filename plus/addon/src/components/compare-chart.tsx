@@ -1,6 +1,5 @@
 // Net worth of the compared plans on one chart, one line per plan slot.
 import {
-  CartesianGrid,
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
@@ -16,7 +15,7 @@ import {
 import type { ReactNode } from 'react';
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
-import { FOREST, OCHRE, PURPLE } from './palette';
+import { AXIS_TICK, FOREST, OCHRE, PURPLE } from './palette';
 
 /** Slot colors: lines cross, so only colors that pass the all-pairs check (palette.ts). */
 const SLOT_COLORS = [FOREST, OCHRE, PURPLE];
@@ -69,12 +68,12 @@ export function CompareChart({ runs, currency, mode }: Props) {
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: 340 }}>
       <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
-        <CartesianGrid vertical={false} strokeOpacity={0.4} />
-        <XAxis dataKey="year" tickLine={false} axisLine={false} minTickGap={24} />
+        <XAxis dataKey="year" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={40} />
         <YAxis
+          tick={AXIS_TICK}
           tickLine={false}
           axisLine={false}
-          width={72}
+          width={64}
           tickFormatter={(v: number) => formatMoney(v, currency, true)}
         />
         <ReferenceLine y={0} stroke="var(--border)" />
