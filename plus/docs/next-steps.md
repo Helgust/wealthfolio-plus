@@ -83,7 +83,7 @@
   `%LOCALAPPDATA%\Programs\strawberry-perl`, путь к `perl.exe` — в переменной пользователя
   `OPENSSL_SRC_PERL`. VS Code, открытый до её появления, её не видит: `dev.ps1` читает её сам,
   в Bash-инструменте — `export OPENSSL_SRC_PERL=...`.
-- `pnpm check` падает на `format:check` почти по всем файлам: `core.autocrlf=true` даёт CRLF, а
+- `pnpm check` падает на `themes:check` и `format:check` почти по всем файлам: `core.autocrlf=true` даёт CRLF, а
   Prettier ждёт LF. Изменённые файлы проверять `npx prettier --check --end-of-line auto <файлы>`.
 - В полном `pnpm test` под нагрузкой (например, параллельно с `cargo`) тесты UI падают по таймауту
   5 с (`spending-date-picker`); отдельно проходят.
