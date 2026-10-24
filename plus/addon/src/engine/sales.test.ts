@@ -58,8 +58,9 @@ describe('withdrawals by account', () => {
 
   it('a sale with no gain adds no tax', () => {
     const [row] = runPlan(retiree({ withdrawalOrder: ['broker'] }), START).rows;
-    expect(row.sales).toHaveLength(1);
-    expect(row.sales[0]).toMatchObject({ accountId: 'broker', taxable: 0, tax: 0, reason: 'deficit' });
+    // The surplus cash leads even an order that leaves it out.
+    expect(row.sales.map((s) => s.accountId)).toEqual(['cash', 'broker']);
+    expect(row.sales[1]).toMatchObject({ accountId: 'broker', taxable: 0, tax: 0, reason: 'deficit' });
   });
 
   it('a down payment out of a fund goal is a sale of its own, with its tax', () => {

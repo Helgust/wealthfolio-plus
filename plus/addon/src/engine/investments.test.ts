@@ -211,6 +211,28 @@ describe('withdrawals', () => {
     expect(rows[1].cash).toBeCloseTo(-5_000, 6);
   });
 
+  it('spends the cash the surplus went to first, even when an explicit order leaves it out', () => {
+    const p = retiree(10_000, { withdrawalOrder: ['fund'] });
+    const rows = runPlan(p, start(cashAccount(15_000), investAccount('fund', 'fund', 1, 50_000, 25_000))).rows;
+    expect(rows[0].withdrawals.cash).toBeCloseTo(10_000, 6);
+    expect(rows[0].realizedGains).toBe(0);
+    expect(rows[1].withdrawals.cash).toBeCloseTo(5_000, 6);
+    expect(rows[1].realizedGains).toBeGreaterThan(0);
+  });
+
+  it('spends the surplus kept outside any account before selling, with no CASH account', () => {
+    const p = retiree(20_000, {
+      withdrawalOrder: ['etf'],
+      expenses: [{ name: 'Living', amount: 20_000, kind: 'essential', start: { kind: 'year', year: 2027 }, end: null }],
+      incomes: [{ name: 'Gift', person: 0, tax: 'exento', amount: 60_000, start: null, end: { kind: 'year', year: 2027 } }],
+    });
+    const rows = runPlan(p, start(investAccount('etf', 'brokerage', 10, 10_000, 50_000))).rows;
+    expect(rows[0].cash).toBeCloseTo(60_000, 6);
+    expect(rows.slice(1, 4).map((r) => r.realizedGains)).toEqual([0, 0, 0]);
+    expect(rows[3].cash).toBeCloseTo(0, 6);
+    expect(rows[4].realizedGains).toBeGreaterThan(0);
+  });
+
   it('projects 30+ years of a mixed portfolio fast', () => {
     const p = retiree(40_000, { returns: { ...ZERO_RETURNS, brokerageGrowth: 0.05, brokerageYield: 0.02 } });
     const s = start(cashAccount(20_000), investAccount('etf', 'brokerage', 100, 10_000, 400_000));

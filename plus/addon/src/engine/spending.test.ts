@@ -43,6 +43,21 @@ describe('spending rules', () => {
     expect(rows[1].discretionaryExpenses).toBeCloseTo(0.04 * 960_000 - 10_000, 6);
   });
 
+  it('a pension plan joins the portfolio only from the access age', () => {
+    const p = retiree({
+      people: [{ name: 'R', birthYear: 1980, disability: 'ninguna', autonomo: null, pension: null }],
+      expenses: [{ name: 'Living', amount: 1_000, kind: 'essential', start: null, end: null }],
+      pensionAccessAge: 47,
+      spending: { kind: 'percent', start: from2026, rate: 0.04 },
+    });
+    const s: StartingPoint = { netWorth: 600_000, accounts: [cashAccount(100_000), investAccount('pp', 'ppi', 1, 500_000, 500_000)] };
+    const rows = runPlan(p, s).rows;
+    expect(rows[0].people[0].age).toBe(46);
+    expect(rows[0].ruleWithdrawal).toBeCloseTo(0.04 * 100_000, 6);
+    expect(rows[1].ruleWithdrawal).toBeCloseTo(0.04 * (96_000 + 500_000), 6);
+    expect(rows[0].shortfall).toBe(0);
+  });
+
   it('essential expenses are a floor', () => {
     const rows = runPlan(retiree({ spending: { kind: 'percent', start: from2026, rate: 0.005 } }), MILLION).rows;
     expect(rows[0].discretionaryExpenses).toBe(0);

@@ -269,13 +269,17 @@ export function endYear(plan: Plan): number {
 
 /**
  * Withdrawal order: from the plan (accounts not listed are never touched) or cash → fondos →
- * brokerage → pension plans. Money held for a loan goal is never in it.
+ * brokerage → pension plans. Money held for a loan goal is never in it. The surplus is left in the
+ * first CASH account, so an explicit order that leaves it out still starts with it: otherwise that
+ * money could never be spent.
  */
 export function withdrawalOrder(plan: Plan, accounts: Account[]): Account[] {
   if (plan.withdrawalOrder.length) {
-    return plan.withdrawalOrder
+    const listed = plan.withdrawalOrder
       .map((id) => accounts.find((a) => a.id === id))
       .filter((a): a is Account => a !== undefined);
+    const sink = accounts.find((a) => a.kind === 'cash');
+    return sink && !listed.includes(sink) ? [sink, ...listed] : listed;
   }
   return accounts.filter((a) => !a.id.startsWith('goal:')).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
 }
@@ -370,7 +374,9 @@ export function runPlan(
     const prev = rows.at(-1);
     const reachedNow = reachMilestones(plan, year, prev ? prev.netWorth / prev.deflator : start.netWorth, reached);
 
-    const portfolio = Math.max(accounts.reduce((s, a) => s + accountValue(a), 0), 0);
+    // A pension plan counts for the rule only once its owner can draw on it.
+    const accessible = accounts.filter((a) => !isPension(a.kind) || ages[pensionOwner(a.owner, n)] >= plan.pensionAccessAge);
+    const portfolio = Math.max(accessible.reduce((s, a) => s + accountValue(a), 0), 0);
     const rule = plan.spending;
     const ruleWithdrawal: number | null =
       rule.kind !== 'planned' && isActive(rule.start, null, year, plan, reached)

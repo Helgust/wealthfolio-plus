@@ -3,7 +3,6 @@
 // The washes are set per theme: on the dark background the same opacity nearly disappears.
 import {
   Area,
-  CartesianGrid,
   ChartContainer,
   ChartLegend,
   ChartTooltip,
@@ -17,7 +16,7 @@ import {
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
 import type { MonteCarloResult } from '../lib/monte-carlo';
-import { FOREST } from './palette';
+import { AXIS_TICK, FOREST } from './palette';
 
 const wash = (hex: string, alpha: number) =>
   `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')}, ${alpha})`;
@@ -55,12 +54,12 @@ export function MonteCarloChart({ result, rows, currency, mode }: Props) {
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: 340 }}>
       <ComposedChart data={data} margin={{ top: 12, right: 16, bottom: 0, left: 8 }}>
-        <CartesianGrid vertical={false} strokeOpacity={0.4} />
-        <XAxis dataKey="year" tickLine={false} axisLine={false} minTickGap={24} />
+        <XAxis dataKey="year" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={40} />
         <YAxis
+          tick={AXIS_TICK}
           tickLine={false}
           axisLine={false}
-          width={72}
+          width={64}
           tickFormatter={(v: number) => formatMoney(v, currency, true)}
         />
         <ReferenceLine y={0} stroke="var(--border)" />

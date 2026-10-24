@@ -300,7 +300,8 @@ export function InvestmentsEditor({ draft, set, accounts, loans }: Props) {
         <p className="text-muted-foreground text-xs">
           When spending and taxes exceed income, money comes from these accounts in order; the tax on
           the sale is covered too. Pension plans are used only from the access age.
-          {order.length > 0 && ' Accounts not in the list are never touched.'}
+          {order.length > 0 &&
+            ` Accounts not in the list are never touched${sink && !order.includes(sink.id) ? `, except ${sink.name}: the surplus goes there, so it is always used first` : ''}.`}
         </p>
         {order.length === 0 ? (
           <div className="space-y-2">

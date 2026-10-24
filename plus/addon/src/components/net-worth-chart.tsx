@@ -3,7 +3,6 @@
 // A click on a year opens that year's panel.
 import {
   Area,
-  CartesianGrid,
   ChartContainer,
   ChartLegend,
   ChartTooltip,
@@ -17,9 +16,10 @@ import {
 import { useRef } from 'react';
 import type { LedgerRow } from '../engine/run-plan';
 import { formatMoney, inMode, type ValueMode } from '../lib/format';
-import { FOREST, OCHRE, PURPLE, STONE, TERRACOTTA } from './palette';
+import { AXIS_TICK, FOREST, MUTED, OCHRE, PURPLE, REFERENCE, STONE, TERRACOTTA } from './palette';
 
 // Stack order is bottom to top — the palette order, validated for adjacent pairs.
+// Styled like the host's own charts: tinted fills under a thin line of the series color.
 const config = {
   cash: { label: 'Cash', theme: FOREST },
   fund: { label: 'Fondos', theme: OCHRE },
@@ -56,6 +56,8 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
     realEstate: inMode(Math.max(r.propertyValue - r.loanBalance, 0), r.deflator, mode),
     milestones: r.milestones.map((id) => milestoneNames[id] ?? id).join(', '),
   }));
+  // Account types empty for the whole plan are left out: their lines would trace the layer below.
+  const shown = STACK.filter((k) => data.some((d) => d[k] > 0));
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: 340, cursor: 'pointer' }}>
       <ComposedChart
@@ -69,12 +71,12 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
           if (row) onYearClick(row.year);
         }}
       >
-        <CartesianGrid vertical={false} strokeOpacity={0.4} />
-        <XAxis dataKey="year" tickLine={false} axisLine={false} minTickGap={24} />
+        <XAxis dataKey="year" tick={AXIS_TICK} tickLine={false} axisLine={false} minTickGap={40} />
         <YAxis
+          tick={AXIS_TICK}
           tickLine={false}
           axisLine={false}
-          width={72}
+          width={64}
           tickFormatter={(v: number) => formatMoney(v, currency, true)}
         />
         <ReferenceLine y={0} stroke="var(--border)" />
@@ -84,13 +86,13 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
             <ReferenceLine
               key={r.year}
               x={r.year}
-              stroke="var(--muted-foreground)"
-              strokeOpacity={0.6}
+              stroke={REFERENCE}
+              strokeDasharray="4 3"
               label={{
                 value: r.milestones.map((id) => milestoneNames[id] ?? id).join(', '),
                 position: 'top',
-                fill: 'var(--muted-foreground)',
-                fontSize: 11,
+                fill: MUTED,
+                fontSize: 10,
               }}
             />
           ))}
@@ -124,16 +126,16 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
             );
           }}
         />
-        {STACK.map((k) => (
+        {shown.map((k) => (
           <Area
             key={k}
             dataKey={k}
             stackId="kinds"
             type="monotone"
-            stroke="var(--background)"
-            strokeWidth={2}
+            stroke={`var(--color-${k})`}
+            strokeWidth={1.5}
             fill={`var(--color-${k})`}
-            fillOpacity={0.85}
+            fillOpacity={0.3}
             isAnimationActive={false}
           />
         ))}
@@ -141,15 +143,15 @@ export function NetWorthChart({ rows, currency, mode, milestoneNames, onYearClic
           dataKey="netWorth"
           type="monotone"
           stroke="var(--color-netWorth)"
-          strokeWidth={2}
+          strokeWidth={1.5}
           dot={false}
           isAnimationActive={false}
         />
-        {/* Own legend: the host one colors swatches by the area stroke, which is the background. */}
+        {/* Own legend: the stack in order, then the net worth line. */}
         <ChartLegend
           content={() => (
             <div className="flex items-center justify-center gap-4 pt-3">
-              {[...STACK, 'netWorth' as const].map((k) => (
+              {[...shown, 'netWorth' as const].map((k) => (
                 <div key={k} className="flex items-center gap-1.5">
                   <div className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: `var(--color-${k})` }} />
                   {config[k].label}

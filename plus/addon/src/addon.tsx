@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AddonContext, AddonEnableFunction } from '@wealthfolio/addon-sdk';
 import { registerTranslations } from '@wealthfolio/addon-sdk';
+import { PageScrollContainer } from '@wealthfolio/ui';
 import type { ReactNode } from 'react';
 import { ComparePage } from './pages/compare-page';
 import { Phase0Page } from './pages/phase0-page';
@@ -10,9 +11,12 @@ import { CHECKS_ROUTE, PlanPage } from './pages/plan-page';
 // Never call createRoot here — the host owns the React root.
 let addonCtx: AddonContext | undefined;
 
+// The addon page scrolls inside its iframe; PageHeader looks for the host's scroll container to
+// show its border and shadow once the page is scrolled, as on the host's own pages. Inline height:
+// the iframe has only the host's CSS, which has no class for it.
 const WithQuery = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={addonCtx!.api.query.getClient() as QueryClient}>
-    {children}
+    <PageScrollContainer style={{ height: '100dvh' }}>{children}</PageScrollContainer>
   </QueryClientProvider>
 );
 
