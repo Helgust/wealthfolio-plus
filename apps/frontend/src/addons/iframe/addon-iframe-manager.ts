@@ -9,6 +9,7 @@ import {
   removeAddonRoute,
 } from "@/addons/addons-runtime-context";
 import { loadAddonAsset, logger } from "@/adapters";
+import { generateId, generateSecureUuid } from "@/lib/id";
 import { toast } from "sonner";
 import { collectAddonThemeSnapshot, type AddonThemeSnapshot } from "./addon-sandbox-theme";
 import {
@@ -41,6 +42,8 @@ interface StartAddonInput {
   permissions?: Permission[];
   /** False when a reload superseded the caller while start-up was awaiting. */
   isCurrent?: () => boolean;
+  /** Release runtime-owned resources before a replacement can start. */
+  onStopped?: () => Promise<void>;
 }
 
 export interface AddonRouteLocation {
@@ -90,6 +93,7 @@ interface Runtime {
   subscriptions: Map<string, () => Promise<void> | void>;
   disableAck?: () => void;
   stopPromise?: Promise<void>;
+  onStopped?: () => Promise<void>;
   resolveLoad: (handle: AddonRuntimeHandle) => void;
   rejectLoad: (error: Error) => void;
   loadTimer?: number;
@@ -123,7 +127,7 @@ interface SandboxMessage {
 }
 
 function createNonce() {
-  return crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36)}`;
+  return generateSecureUuid();
 }
 
 function createAddonLoadCancelledError(addonId: string, reason = "was unloaded before it loaded") {
@@ -158,11 +162,14 @@ function createSandboxBootstrapParams(
   if (localization.uiLocale) {
     params.set("uiLocale", localization.uiLocale);
   }
+  if (localization.direction) {
+    params.set("direction", localization.direction);
+  }
   return params.toString();
 }
 
 function makeRequestId() {
-  return crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+  return generateId();
 }
 
 function formatUnknownError(error: unknown) {
@@ -471,11 +478,11 @@ export class AddonIframeManager {
     if (input.isCurrent?.() === false) {
       throw createAddonLoadCancelledError(input.addonId, "load was superseded by a reload");
     }
+    const nonce = createNonce();
     this.ensureListener();
     this.ensureThemeObserver();
     this.ensureLocalizationListener();
 
-    const nonce = createNonce();
     const initialTheme = collectAddonThemeSnapshot();
     const initialLocalization = collectAddonLocalizationSnapshot();
     const sandboxBootstrapParams = createSandboxBootstrapParams(
@@ -529,6 +536,7 @@ export class AddonIframeManager {
             return loadAddonAsset(input.addonId, assetId, asset?.mimeType);
           }),
         nonce,
+        onStopped: input.onStopped,
         permissionGuard: createPermissionGuard(input.addonId, input.permissions),
         rejectLoad: reject,
         resolveLoad: resolve,
@@ -563,6 +571,9 @@ export class AddonIframeManager {
         throw createAddonLoadCancelledError(input.addonId, "load was superseded by a reload");
       }
       return handle;
+    } catch (error) {
+      await this.stopRuntimeIfCurrent(runtime);
+      throw error;
     } finally {
       this.clearLoadTimeout(runtime);
     }
@@ -591,7 +602,8 @@ export class AddonIframeManager {
 
   /** Whether an addon's iframe runtime has been booted (used by the activation coordinator). */
   hasRuntime(addonId: string): boolean {
-    return this.runtimes.has(addonId);
+    const runtime = this.runtimes.get(addonId);
+    return runtime !== undefined && runtime.stopPromise === undefined;
   }
 
   getRouteStatus(
@@ -719,6 +731,7 @@ export class AddonIframeManager {
     runtime.containerResizeObserver = undefined;
     this.hideFrame(runtime);
     runtime.iframe.remove();
+    await runtime.onStopped?.();
     if (this.runtimes.get(runtime.addonId) === runtime) {
       this.runtimes.delete(runtime.addonId);
       clearAddonRegistrations(runtime.addonId);

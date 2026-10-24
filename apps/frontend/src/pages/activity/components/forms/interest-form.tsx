@@ -24,6 +24,8 @@ import {
   type AccountSelectOption,
 } from "./fields";
 import { calculateIncomeFinalAmount } from "@/lib/activity-final-amount";
+import { assetMetadataSchema } from "./schemas";
+import { Spinner } from "@wealthfolio/ui";
 
 // Non-UI sentinel for the "cash" income mode (not a DB value; internal only).
 const INCOME_MODE_CASH = "CASH";
@@ -112,6 +114,7 @@ export const createInterestFormSchema = (t?: TFunction) =>
       subtype: z.string().optional().nullable(),
       symbolQuoteCcy: z.string().nullable().optional(),
       symbolInstrumentType: z.string().nullable().optional(),
+      assetMetadata: assetMetadataSchema,
     })
     .superRefine((data, ctx) => {
       const isStakingReward = data.subtype === ACTIVITY_SUBTYPES.STAKING_REWARD;
@@ -299,7 +302,10 @@ export function InterestForm({
             quoteCcyName="symbolQuoteCcy"
             instrumentTypeName="symbolInstrumentType"
             existingAssetIdName="existingAssetId"
+            assetMetadataName="assetMetadata"
           />
+          <input type="hidden" {...form.register("assetMetadata.providerId")} />
+          <input type="hidden" {...form.register("assetMetadata.providerSymbol")} />
           <input type="hidden" {...form.register("symbolQuoteCcy")} />
           <input type="hidden" {...form.register("symbolInstrumentType")} />
           <input type="hidden" {...form.register("existingAssetId")} />
@@ -403,11 +409,11 @@ export function InterestForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {isEditing ? t("activity:form.button_update") : t("activity:form.button_add_interest")}
           </Button>
