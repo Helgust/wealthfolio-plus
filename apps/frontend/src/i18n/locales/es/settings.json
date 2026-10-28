@@ -1467,6 +1467,10 @@
       "classification_write": {
         "label": "Clasificación: aplicar/escribir",
         "description": "Aplicar borradores de clasificación revisados. Requiere el ámbito de sugerencia."
+      },
+      "financial_planning_draft": {
+        "label": "Planificación financiera: borrador",
+        "description": "Proponer borradores de presupuesto que aceptas o rechazas en el complemento del planificador."
       }
     },
     "preset": {

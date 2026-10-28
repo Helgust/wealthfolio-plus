@@ -108,7 +108,7 @@ pub use commit_categorization_rule::{
 };
 
 // wealthfolio-plus: budgets of the Planificador ES addon.
-pub use budgets::{GetBudgets, GetBudgetsArgs};
+pub use budgets::{GetBudgets, GetBudgetsArgs, PrepareBudgetDraft, PrepareBudgetDraftArgs};
 
 // MCP-only CSV import tools (validate + dedup-safe import pipeline).
 pub use activity_import::{
@@ -184,7 +184,7 @@ pub fn import_tools() -> Vec<Arc<dyn AgentTool>> {
 /// kept apart from the upstream lists so merges of Wealthfolio releases do not
 /// touch them.
 pub fn plus_tools() -> Vec<Arc<dyn AgentTool>> {
-    vec![Arc::new(GetBudgets)]
+    vec![Arc::new(GetBudgets), Arc::new(PrepareBudgetDraft)]
 }
 
 #[cfg(test)]

@@ -1415,6 +1415,10 @@
       "classification_write": {
         "label": "分类——应用/写入",
         "description": "应用已审核的分类草稿。需要建议作用域。"
+      },
+      "financial_planning_draft": {
+        "label": "财务规划（草稿）",
+        "description": "提出预算草稿，由你在规划器插件中接受或拒绝。"
       }
     },
     "preset": {

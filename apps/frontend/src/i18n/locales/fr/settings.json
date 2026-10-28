@@ -1467,6 +1467,10 @@
       "classification_write": {
         "label": "Classification — appliquer/écrire",
         "description": "Appliquer des brouillons de classification révisés. Nécessite la portée suggestion."
+      },
+      "financial_planning_draft": {
+        "label": "Planification financière — brouillon",
+        "description": "Proposer des brouillons de budget que vous acceptez ou refusez dans le module du planificateur."
       }
     },
     "preset": {

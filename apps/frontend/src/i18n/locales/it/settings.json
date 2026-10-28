@@ -1467,6 +1467,10 @@
       "classification_write": {
         "label": "Classificazione — applica/scrittura",
         "description": "Applica le bozze di classificazione revisionate. Richiede l'ambito suggerimento."
+      },
+      "financial_planning_draft": {
+        "label": "Pianificazione finanziaria — bozza",
+        "description": "Proporre bozze di budget da accettare o rifiutare nel componente aggiuntivo del pianificatore."
       }
     },
     "preset": {

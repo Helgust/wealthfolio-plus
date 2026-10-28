@@ -1432,6 +1432,10 @@
       "classification_write": {
         "label": "Klassifizierung — anwenden/schreiben",
         "description": "Geprüfte Klassifizierungsentwürfe anwenden. Erfordert die Vorschlags-Berechtigung."
+      },
+      "financial_planning_draft": {
+        "label": "Finanzplanung — Entwurf",
+        "description": "Budgetentwürfe vorschlagen, die Sie im Planer-Add-on annehmen oder ablehnen."
       }
     },
     "preset": {

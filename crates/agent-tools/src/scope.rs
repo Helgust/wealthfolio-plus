@@ -23,6 +23,8 @@ pub enum AgentScope {
     ActivitiesWrite,
     ClassificationSuggest,
     ClassificationWrite,
+    /// wealthfolio-plus: prepare a budget draft the user accepts in the addon.
+    FinancialPlanningDraft,
 }
 
 impl AgentScope {
@@ -40,6 +42,7 @@ impl AgentScope {
         AgentScope::ActivitiesWrite,
         AgentScope::ClassificationSuggest,
         AgentScope::ClassificationWrite,
+        AgentScope::FinancialPlanningDraft,
     ];
 
     /// The read-only scopes — what the `read-only` preset grants. Kept
@@ -69,6 +72,7 @@ impl AgentScope {
             AgentScope::ActivitiesWrite => "activities:write",
             AgentScope::ClassificationSuggest => "classification:suggest",
             AgentScope::ClassificationWrite => "classification:write",
+            AgentScope::FinancialPlanningDraft => "financial-planning:draft",
         }
     }
 
@@ -226,6 +230,7 @@ mod tests {
         assert!(!set.contains(AgentScope::ActivitiesWrite));
         assert!(!set.contains(AgentScope::ClassificationSuggest));
         assert!(!set.contains(AgentScope::ClassificationWrite));
+        assert!(!set.contains(AgentScope::FinancialPlanningDraft));
     }
 
     #[test]

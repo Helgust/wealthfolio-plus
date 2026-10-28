@@ -1392,6 +1392,10 @@
       "classification_write": {
         "label": "Classification — apply/write",
         "description": "Apply reviewed classification drafts. Requires the suggest scope."
+      },
+      "financial_planning_draft": {
+        "label": "Financial planning — draft",
+        "description": "Propose budget drafts that you accept or reject in the planner addon."
       }
     },
     "preset": {

@@ -1467,6 +1467,10 @@
       "classification_write": {
         "label": "Classificação: aplicar/gravar",
         "description": "Aplicar rascunhos de classificação revisados. Requer o escopo de sugestão."
+      },
+      "financial_planning_draft": {
+        "label": "Planejamento financeiro — rascunho",
+        "description": "Propor rascunhos de orçamento que você aceita ou rejeita no complemento do planejador."
       }
     },
     "preset": {

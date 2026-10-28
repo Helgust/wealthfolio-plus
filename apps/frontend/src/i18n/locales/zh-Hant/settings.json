@@ -1432,6 +1432,10 @@
       "classification_write": {
         "label": "分類 — 套用／寫入",
         "description": "套用已審核的分類草稿。需要建議範圍。"
+      },
+      "financial_planning_draft": {
+        "label": "財務規劃（草稿）",
+        "description": "提出預算草稿，由你在規劃器外掛程式中接受或拒絕。"
       }
     },
     "preset": {

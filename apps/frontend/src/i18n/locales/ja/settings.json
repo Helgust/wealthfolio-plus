@@ -1415,6 +1415,10 @@
       "classification_write": {
         "label": "分類 — 適用/書き込み",
         "description": "確認済みの分類の下書きを適用します。提案のスコープが必要です。"
+      },
+      "financial_planning_draft": {
+        "label": "資産計画(下書き)",
+        "description": "プランナーアドオンで承認または却下する予算の下書きを提案します。"
       }
     },
     "preset": {

@@ -287,7 +287,7 @@ async fn mcp_pat_lifecycle() {
     let session = mcp_initialize(&server, &pat).await;
 
     // tools/list -> the read-only catalog: 16 read tools + get_import_mapping
-    // (also activities:read) = 17.
+    // (also activities:read) + wealthfolio-plus get_budgets = 18.
     let response = mcp_post(
         &server,
         Some(&pat),
@@ -300,8 +300,8 @@ async fn mcp_pat_lifecycle() {
     let tools = list["result"]["tools"].as_array().unwrap();
     assert_eq!(
         tools.len(),
-        17,
-        "read-only catalog must expose 17 tools (incl. get_import_mapping): {tools:?}"
+        18,
+        "read-only catalog must expose 18 tools (incl. get_import_mapping, get_budgets): {tools:?}"
     );
 
     // (h) tools/call succeeds and writes an audit row (awaited before the
@@ -448,8 +448,9 @@ async fn mcp_pat_lifecycle() {
 
 /// A write/suggest-scoped token sees the draft, suggest, commit, AND import
 /// tools via `tools/list` — proving scope-gated visibility extends past the
-/// read-only catalog. (Read-only tokens see 17; the full MCP catalog is
-/// 16 read + get_import_mapping + 5 draft/suggest + 3 commit + 2 import = 27.)
+/// read-only catalog. (Read-only tokens see 18; the full MCP catalog is
+/// 16 read + get_import_mapping + 5 draft/suggest + 4 commit + 2 import = 28,
+/// plus the wealthfolio-plus get_budgets and prepare_budget_draft = 30.)
 #[tokio::test]
 async fn mcp_write_scoped_token_sees_write_tools() {
     let server = spawn_server(true, false).await;
@@ -463,6 +464,7 @@ async fn mcp_write_scoped_token_sees_write_tools() {
             "activities:write",
             "classification:suggest",
             "classification:write",
+            "financial-planning:draft",
         ])
         .collect();
     let (status, created) = create_pat(
@@ -472,7 +474,7 @@ async fn mcp_write_scoped_token_sees_write_tools() {
     )
     .await;
     assert_eq!(status, 201);
-    assert_eq!(created["scopes"].as_array().unwrap().len(), 11);
+    assert_eq!(created["scopes"].as_array().unwrap().len(), 12);
     let pat = created["token"].as_str().unwrap().to_string();
 
     let session = mcp_initialize(&server, &pat).await;
@@ -489,8 +491,12 @@ async fn mcp_write_scoped_token_sees_write_tools() {
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert_eq!(
         tools.len(),
-        28,
-        "full-scope token must see all 28 tools: {names:?}"
+        30,
+        "full-scope token must see all 30 tools: {names:?}"
+    );
+    assert!(
+        names.contains(&"prepare_budget_draft"),
+        "budget draft tool visible"
     );
     assert!(
         names.contains(&"commit_activity_import"),
