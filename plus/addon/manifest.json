@@ -80,7 +80,7 @@
         "getIncomeSummary",
         "getNetWorth"
       ],
-      "purpose": "Starting net worth and cash, FIFO lots, valuation history and income for projections"
+      "purpose": "Starting net worth and cash, FIFO lots, valuation history (also budget plan vs fact by month) and income for projections"
     },
     {
       "category": "alternative-assets",
@@ -88,6 +88,36 @@
         "getAll"
       ],
       "purpose": "Property and debts for projections"
+    },
+    {
+      "category": "quotes",
+      "functions": [
+        "getHistory"
+      ],
+      "purpose": "Budget: what is owed on a linked liability at the end of each month"
+    },
+    {
+      "category": "financial-planning",
+      "functions": [
+        "getAll",
+        "update"
+      ],
+      "purpose": "Budget: fill targets from goals, and the month a goal is reached as its target date"
+    },
+    {
+      "category": "spending",
+      "functions": [
+        "getCategories",
+        "getReport"
+      ],
+      "purpose": "Budget: monthly averages by category as a draft of incomes and expenses"
+    },
+    {
+      "category": "activities",
+      "functions": [
+        "saveTransferPair"
+      ],
+      "purpose": "Budget: record a month's envelope deposits as transfers, after you confirm them"
     }
   ],
   "keywords": [

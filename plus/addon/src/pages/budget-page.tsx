@@ -1,6 +1,7 @@
-// Budget page: a month-by-month short-term plan — key dates, plan vs Wealthfolio for this month,
-// envelope and loan balances, the table by month; a draft proposed through MCP to preview, accept
-// or reject.
+// Budget page: a month-by-month short-term plan — key dates, plan vs Wealthfolio for this month and,
+// for past months, in the chart and the table; envelope and loan balances, the table by month; a
+// draft proposed through MCP to preview, accept or reject; this month's deposits to record as
+// transfers.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -20,13 +21,23 @@ import {
   TableRow,
 } from '@wealthfolio/ui';
 import { Check, Eye, EyeOff, Pencil, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { BudgetChart } from '../components/budget-chart';
-import { BudgetEditor } from '../components/budget-editor';
+import { BudgetEditor, type SpendingDraft } from '../components/budget-editor';
 import { PageMessage } from '../components/page-message';
 import { PlanSwitcher } from '../components/plan-switcher';
+import { RecordTransfersDialog } from '../components/record-transfers-dialog';
 import { runBudget, type BudgetMonth } from '../engine/budget';
 import { PORTFOLIO_KEY } from '../hooks/use-planner-data';
+import {
+  lastMonths,
+  loadBudgetFact,
+  monthEnd,
+  spendingLines,
+  withGoalTargets,
+  type BudgetFact,
+} from '../lib/budget-fact';
+import { getSpendingReport } from '../lib/fork-api';
 import { formatMoney } from '../lib/format';
 import { isLiability, loadPortfolio, type LoadedPortfolio } from '../lib/starting-point';
 import { newBudget, type Budget } from '../model/budget';
@@ -40,6 +51,7 @@ import {
   DRAFT_KEY,
   loadBudgets,
   loadDraft,
+  loadRecorded,
   MAX_BUDGETS,
   saveBudgets,
   setBudget,
@@ -50,6 +62,9 @@ import {
 
 const QUERY_KEY = ['planificador-es', BUDGETS_KEY];
 const DRAFT_QUERY_KEY = ['planificador-es', DRAFT_KEY];
+const GOALS_KEY = ['planificador-es', 'goals'];
+const FACT_KEY = ['planificador-es', 'budget-fact'];
+const RECORDED_KEY = ['planificador-es', 'budget-transfers'];
 /** The MCP server writes drafts while the page is open: check for one this often. */
 const DRAFT_POLL_MS = 10_000;
 
@@ -58,12 +73,13 @@ const thisMonth = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Metric({ label, value, hint, action }: { label: string; value: string; hint?: string; action?: ReactNode }) {
   return (
     <div>
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
       {hint && <div className="text-muted-foreground text-xs">{hint}</div>}
+      {action}
     </div>
   );
 }
@@ -77,7 +93,20 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
     queryFn: () => loadDraft(ctx.api.storage),
     refetchInterval: DRAFT_POLL_MS,
   });
+  const goals = useQuery({
+    queryKey: GOALS_KEY,
+    queryFn: () =>
+      ctx.api.goals.getAll().catch((e) => {
+        ctx.api.logger.warn(`goals.getAll unavailable: ${String(e)}`);
+        return [];
+      }),
+  });
+  const recorded = useQuery({
+    queryKey: RECORDED_KEY,
+    queryFn: () => loadRecorded(ctx.api.storage),
+  });
   const [editing, setEditing] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -86,8 +115,38 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
   const draft = draftQuery.data ?? null;
   const preview = previewing && draft?.budget ? draft.budget : null;
   // What the page shows: the draft while previewing it, otherwise the active budget.
-  const budget = preview ?? active?.budget;
+  const saved = preview ?? active?.budget;
+  // shortcut: the MCP forecast runs the saved targets; it catches up with the goals on the next save.
+  const budget = useMemo(() => saved && withGoalTargets(saved, goals.data ?? []), [saved, goals.data]);
   const rows = useMemo(() => (budget ? runBudget(budget) : null), [budget]);
+  const today = thisMonth();
+  const factQuery = useQuery({
+    queryKey: [...FACT_KEY, budget?.start, budget?.months, budget?.envelopes, budget?.loans, today],
+    queryFn: () => loadBudgetFact(ctx, budget!, today),
+    enabled: !!budget,
+  });
+  const fact = factQuery.data ?? { envelopes: {}, loans: {} };
+
+  const spendingDraft: SpendingDraft = async (months) => {
+    const { startDate, endDate } = lastMonths(today, months);
+    const [report, categories] = await Promise.all([
+      getSpendingReport(ctx, startDate, endDate),
+      ctx.api.spending.getCategories(),
+    ]);
+    const names = new Map(categories.map((c) => [c.categoryId, c.name]));
+    return spendingLines(report, names, months, { incomes: 30, expenses: 30 });
+  };
+
+  async function setGoalDate(goalId: string, month: string) {
+    setActionError(null);
+    const goal = goals.data?.find((g) => g.id === goalId);
+    try {
+      if (goal) await ctx.api.goals.update({ ...goal, targetDate: monthEnd(month) });
+      await queryClient.invalidateQueries({ queryKey: GOALS_KEY });
+    } catch (e) {
+      setActionError(String(e));
+    }
+  }
 
   /** true — saved */
   async function change(op: (b: BudgetBook) => BudgetBook): Promise<boolean> {
@@ -115,7 +174,6 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
   if (!portfolio.data || !book || !active || !budget || !rows) return <PageMessage />;
 
   const currency = portfolio.data.currency ?? 'EUR';
-  const today = thisMonth();
   const current = rows.find((r) => r.month === today);
   const interest = rows.reduce((s, r) => s + r.interest, 0);
   const shortfall = rows.find((r) => r.unallocated < -0.5);
@@ -206,11 +264,29 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
                 if (s.kind !== 'fill') return [];
                 const e = budget.envelopes.find((x) => x.id === s.envelopeId)!;
                 const reached = rows.find((r) => r.balances[e.id] >= s.target - 0.5);
+                const goal = goals.data?.find((g) => g.id === s.goalId);
+                const date = reached && monthEnd(reached.month);
                 return [
                   <Metric
                     key={`${e.id}-${s.target}`}
-                    label={`${e.name} at ${formatMoney(s.target, currency)}`}
+                    label={`${goal ? goal.title : e.name} at ${formatMoney(s.target, currency)}`}
                     value={reached ? reached.month : 'Not in the budget'}
+                    hint={goal && `goal date ${goal.targetDate?.slice(0, 10) ?? 'not set'}`}
+                    action={
+                      goal &&
+                      date &&
+                      goal.targetDate?.slice(0, 10) !== date &&
+                      preview === null && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs"
+                          onClick={() => setGoalDate(goal.id, reached.month)}
+                        >
+                          Set goal date to {date}
+                        </Button>
+                      )
+                    }
                   />,
                 ];
               })}
@@ -218,12 +294,19 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
                 <Metric label="Interest, all loans" value={formatMoney(interest, currency)} />
               )}
             </div>
-            <BudgetChart budget={budget} rows={rows} currency={currency} today={today} />
+            <BudgetChart budget={budget} rows={rows} fact={fact} currency={currency} today={today} />
           </CardContent>
         </Card>
 
-        <FactCard budget={budget} current={current} portfolio={portfolio.data} currency={currency} today={today} />
-        <MonthTable budget={budget} rows={rows} currency={currency} today={today} />
+        <FactCard
+          budget={budget}
+          current={current}
+          portfolio={portfolio.data}
+          currency={currency}
+          today={today}
+          onRecord={preview === null ? () => setRecording(true) : undefined}
+        />
+        <MonthTable budget={budget} rows={rows} fact={fact} currency={currency} today={today} />
 
         <p className="text-muted-foreground text-xs">
           Net euros, no taxes, returns or inflation: the yearly plan models those. Loan interest accrues monthly on the
@@ -234,13 +317,34 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
         budget={active.budget}
         open={editing}
         portfolio={portfolio.data}
+        goals={goals.data ?? []}
         currency={currency}
+        spendingDraft={spendingDraft}
         onClose={() => setEditing(false)}
         onSave={async (next: Budget) => {
           await change((b) => setBudget(b, active.id, next));
           setEditing(false);
         }}
       />
+      {current && recorded.data && (
+        <RecordTransfersDialog
+          key={`${active.id}/${today}/${recording}`}
+          ctx={ctx}
+          budgetId={active.id}
+          budget={budget}
+          row={current}
+          accounts={portfolio.data.accounts}
+          currency={currency}
+          recorded={recorded.data}
+          open={recording}
+          onClose={() => setRecording(false)}
+          onRecorded={() =>
+            Promise.all(
+              [RECORDED_KEY, PORTFOLIO_KEY, FACT_KEY].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+            )
+          }
+        />
+      )}
     </Page>
   );
 }
@@ -307,10 +411,12 @@ interface FactProps {
   portfolio: LoadedPortfolio;
   currency: string;
   today: string;
+  /** Opens the dialog that records this month's deposits; undefined — not while previewing a draft */
+  onRecord?: () => void;
 }
 
 /** Plan at the end of this month next to Wealthfolio now, for envelopes and loans linked to it. */
-function FactCard({ budget, current, portfolio, currency, today }: FactProps) {
+function FactCard({ budget, current, portfolio, currency, today, onRecord }: FactProps) {
   const liabilities = (portfolio.alternatives ?? []).filter(isLiability);
   const lines = [
     ...budget.envelopes.flatMap((e) => {
@@ -327,7 +433,14 @@ function FactCard({ budget, current, portfolio, currency, today }: FactProps) {
   return (
     <Card>
       <CardContent className="space-y-2 pt-6">
-        <h3 className="font-medium">Plan vs Wealthfolio, {today}</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium">Plan vs Wealthfolio, {today}</h3>
+          {current && onRecord && (
+            <Button size="sm" variant="outline" onClick={onRecord}>
+              Record this month's transfers…
+            </Button>
+          )}
+        </div>
         {!current ? (
           <p className="text-muted-foreground text-sm">This month is outside the budget.</p>
         ) : !lines.length ? (
@@ -363,17 +476,20 @@ function FactCard({ budget, current, portfolio, currency, today }: FactProps) {
 
 interface Column {
   label: string;
-  value: (r: BudgetMonth) => number;
+  /** undefined — no fact for the month */
+  value: (r: BudgetMonth) => number | undefined;
 }
 
 function MonthTable({
   budget,
   rows,
+  fact,
   currency,
   today,
 }: {
   budget: Budget;
   rows: BudgetMonth[];
+  fact: BudgetFact;
   currency: string;
   today: string;
 }) {
@@ -387,9 +503,17 @@ function MonthTable({
     { label: 'Paid from envelopes', value: (r) => sum(r.withdrawn) },
     { label: 'Prepaid', value: (r) => sum(r.prepaid) },
     { label: 'Unallocated', value: (r) => r.unallocated },
-    ...budget.envelopes.map((e) => ({ label: e.name, value: (r: BudgetMonth) => r.balances[e.id] })),
+    ...budget.envelopes.flatMap((e) => [
+      { label: e.name, value: (r: BudgetMonth) => r.balances[e.id] },
+      ...(fact.envelopes[e.id]
+        ? [{ label: `${e.name} fact`, value: (r: BudgetMonth) => fact.envelopes[e.id][r.month] }]
+        : []),
+    ]),
     ...budget.loans.flatMap((l) => [
       { label: `${l.name} owed`, value: (r: BudgetMonth) => r.loans[l.id].balance },
+      ...(fact.loans[l.id]
+        ? [{ label: `${l.name} owed, fact`, value: (r: BudgetMonth) => fact.loans[l.id][r.month] }]
+        : []),
       { label: `${l.name} next payment`, value: (r: BudgetMonth) => r.loans[l.id].payment },
     ]),
   ];
@@ -410,11 +534,14 @@ function MonthTable({
           {rows.map((r) => (
             <TableRow key={r.month} className={r.month === today ? 'bg-muted/50' : undefined}>
               <TableCell className="whitespace-nowrap">{r.month}</TableCell>
-              {columns.map((c) => (
-                <TableCell key={c.label} className="text-right tabular-nums">
-                  {formatMoney(c.value(r), currency)}
-                </TableCell>
-              ))}
+              {columns.map((c) => {
+                const v = c.value(r);
+                return (
+                  <TableCell key={c.label} className="text-right tabular-nums">
+                    {v === undefined ? '—' : formatMoney(v, currency)}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>

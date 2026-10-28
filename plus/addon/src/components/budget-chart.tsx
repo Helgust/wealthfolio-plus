@@ -1,4 +1,5 @@
-// Budget by month: envelope balances as lines, loans as dashed lines, the current month marked.
+// Budget by month: envelope balances as lines, loans as dashed lines, the Wealthfolio balances of
+// past months as dotted lines in the same colors, the current month marked.
 import {
   ChartContainer,
   ChartLegend,
@@ -11,6 +12,7 @@ import {
   type ChartConfig,
 } from '@wealthfolio/ui/chart';
 import type { BudgetMonth } from '../engine/budget';
+import type { BudgetFact } from '../lib/budget-fact';
 import { formatMoney } from '../lib/format';
 import type { Budget } from '../model/budget';
 import { AXIS_TICK, FOREST, MUTED, OCHRE, PURPLE, REFERENCE, STONE, TERRACOTTA } from './palette';
@@ -21,25 +23,25 @@ const COLORS = [FOREST, OCHRE, PURPLE, TERRACOTTA];
 interface Props {
   budget: Budget;
   rows: BudgetMonth[];
+  fact: BudgetFact;
   currency: string;
   /** This month, "2026-11" */
   today: string;
 }
 
-export function BudgetChart({ budget, rows, currency, today }: Props) {
+export function BudgetChart({ budget, rows, fact, currency, today }: Props) {
   const series = [
-    ...budget.envelopes.map((e, i) => ({
-      key: `e_${e.id}`,
-      label: e.name,
-      theme: COLORS[i % COLORS.length],
-      loan: false,
-    })),
-    ...budget.loans.map((l) => ({
-      key: `l_${l.id}`,
-      label: l.name,
-      theme: STONE,
-      loan: true,
-    })),
+    ...budget.envelopes.flatMap((e, i) => {
+      const theme = COLORS[i % COLORS.length];
+      const plan = { key: `e_${e.id}`, label: e.name, theme, loan: false, fact: false };
+      return fact.envelopes[e.id]
+        ? [plan, { ...plan, key: `fe_${e.id}`, label: `${e.name} fact`, fact: true }]
+        : [plan];
+    }),
+    ...budget.loans.flatMap((l) => {
+      const plan = { key: `l_${l.id}`, label: l.name, theme: STONE, loan: true, fact: false };
+      return fact.loans[l.id] ? [plan, { ...plan, key: `fl_${l.id}`, label: `${l.name} fact`, fact: true }] : [plan];
+    }),
   ];
   const config = Object.fromEntries(
     series.map((s) => [s.key, { label: s.label, theme: s.theme }]),
@@ -48,6 +50,8 @@ export function BudgetChart({ budget, rows, currency, today }: Props) {
     month: r.month,
     ...Object.fromEntries(budget.envelopes.map((e) => [`e_${e.id}`, r.balances[e.id]])),
     ...Object.fromEntries(budget.loans.map((l) => [`l_${l.id}`, r.loans[l.id].balance])),
+    ...Object.fromEntries(Object.entries(fact.envelopes).map(([id, v]) => [`fe_${id}`, v[r.month]])),
+    ...Object.fromEntries(Object.entries(fact.loans).map(([id, v]) => [`fl_${id}`, v[r.month]])),
   }));
   return (
     <ChartContainer config={config} className="aspect-auto w-full" style={{ height: 300 }}>
@@ -76,12 +80,14 @@ export function BudgetChart({ budget, rows, currency, today }: Props) {
             return (
               <div className="bg-background min-w-48 rounded-md border px-3 py-2 text-xs shadow-sm">
                 <div className="font-medium">{d.month}</div>
-                {series.map((s) => (
-                  <div key={s.key} className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">{s.loan ? `${s.label} (owed)` : s.label}</span>
-                    <span className="tabular-nums">{formatMoney(Number(d[s.key]), currency)}</span>
-                  </div>
-                ))}
+                {series.map((s) =>
+                  d[s.key] === undefined ? null : (
+                    <div key={s.key} className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">{s.loan ? `${s.label} (owed)` : s.label}</span>
+                      <span className="tabular-nums">{formatMoney(Number(d[s.key]), currency)}</span>
+                    </div>
+                  ),
+                )}
               </div>
             );
           }}
@@ -93,8 +99,8 @@ export function BudgetChart({ budget, rows, currency, today }: Props) {
             type="monotone"
             stroke={`var(--color-${s.key})`}
             strokeWidth={1.5}
-            strokeDasharray={s.loan ? '5 3' : undefined}
-            dot={false}
+            strokeDasharray={s.fact ? '1 3' : s.loan ? '5 3' : undefined}
+            dot={s.fact ? { r: 2.5, fill: `var(--color-${s.key})` } : false}
             isAnimationActive={false}
           />
         ))}

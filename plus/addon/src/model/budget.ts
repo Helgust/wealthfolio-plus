@@ -54,7 +54,8 @@ export const BudgetLoanSchema = z.object({
 /**
  * One step of the queue that shares out the month's free money, in order. fixed — an amount a
  * month, up to cap if set; fill — up to a target balance; rest — everything left. whileLoan — the
- * step runs only while that loan has a balance at the start of the month.
+ * step runs only while that loan has a balance at the start of the month. goalId — a Wealthfolio
+ * goal whose target amount the budget page uses instead of target.
  */
 export const BudgetStepSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -64,7 +65,7 @@ export const BudgetStepSchema = z.discriminatedUnion('kind', [
     cap: money.nullable(),
     whileLoan: id.nullable(),
   }),
-  z.object({ kind: z.literal('fill'), envelopeId: id, target: money }),
+  z.object({ kind: z.literal('fill'), envelopeId: id, target: money, goalId: z.string().min(1).optional() }),
   z.object({ kind: z.literal('rest'), envelopeId: id, whileLoan: id.nullable() }),
 ]);
 

@@ -39,16 +39,28 @@ const NONE = 'none';
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const newId = (prefix: string) => `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
+/** A Wealthfolio goal a fill step can take its target from */
+export interface GoalOption {
+  id: string;
+  title: string;
+  targetAmount: number;
+}
+
+/** Budget lines averaged from the Wealthfolio spending report over the last `months` months */
+export type SpendingDraft = (months: number) => Promise<{ incomes: BudgetLine[]; expenses: BudgetLine[] }>;
+
 interface Props {
   budget: Budget;
   open: boolean;
   portfolio: LoadedPortfolio;
+  goals: GoalOption[];
   currency: string;
+  spendingDraft: SpendingDraft;
   onClose: () => void;
   onSave: (budget: Budget) => Promise<void>;
 }
 
-export function BudgetEditor({ budget, open, portfolio, currency, onClose, onSave }: Props) {
+export function BudgetEditor({ budget, open, onClose, ...rest }: Props) {
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="overflow-y-auto" style={{ width: 720, maxWidth: 720 }}>
@@ -57,9 +69,7 @@ export function BudgetEditor({ budget, open, portfolio, currency, onClose, onSav
           <SheetDescription>Net euros per month. Months are YYYY-MM; an empty “to” — until the end.</SheetDescription>
         </SheetHeader>
         {/* The form mounts on open, so the draft always starts from the budget. */}
-        {open && (
-          <BudgetForm budget={budget} portfolio={portfolio} currency={currency} onSave={onSave} onCancel={onClose} />
-        )}
+        {open && <BudgetForm budget={budget} {...rest} onCancel={onClose} />}
       </SheetContent>
     </Sheet>
   );
@@ -70,7 +80,9 @@ type Set = (patch: Partial<Budget>) => void;
 function BudgetForm({
   budget,
   portfolio,
+  goals,
   currency,
+  spendingDraft,
   onSave,
   onCancel,
 }: Omit<Props, 'open' | 'onClose'> & { onCancel: () => void }) {
@@ -97,11 +109,12 @@ function BudgetForm({
 
   const parts = [
     <GeneralSection key="general" draft={draft} set={set} />,
+    <SpendingSection key="spending" draft={draft} set={set} spendingDraft={spendingDraft} />,
     <LinesSection key="incomes" title="Incomes" field="incomes" draft={draft} set={set} />,
     <LinesSection key="expenses" title="Expenses" field="expenses" draft={draft} set={set} />,
     <EnvelopesSection key="envelopes" draft={draft} set={set} portfolio={portfolio} currency={currency} />,
     <LoansSection key="loans" draft={draft} set={set} portfolio={portfolio} currency={currency} />,
-    <StepsSection key="steps" draft={draft} set={set} />,
+    <StepsSection key="steps" draft={draft} set={set} goals={goals} />,
     <PrepaymentsSection key="prepayments" draft={draft} set={set} />,
     <OneTimeSection key="oneTime" draft={draft} set={set} />,
   ];
@@ -220,6 +233,53 @@ function GeneralSection({ draft, set }: SectionProps) {
         <NumberInput value={draft.months} onChange={(v) => set({ months: v ?? 0 })} />
       </Field>
     </section>
+  );
+}
+
+const MAX_LINES = 30;
+
+function SpendingSection({ draft, set, spendingDraft }: SectionProps & { spendingDraft: SpendingDraft }) {
+  const [months, setMonths] = useState('12');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function add() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const d = await spendingDraft(Number(months));
+      const incomes = d.incomes.slice(0, MAX_LINES - draft.incomes.length);
+      const expenses = d.expenses.slice(0, MAX_LINES - draft.expenses.length);
+      set({ incomes: [...draft.incomes, ...incomes], expenses: [...draft.expenses, ...expenses] });
+      setNote(`Added ${incomes.length} incomes and ${expenses.length} expenses.`);
+    } catch (e) {
+      setNote(`Spending report unavailable: ${String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Section
+      title="From Wealthfolio spending"
+      hint="Adds monthly averages by category from the Spending report as lines to edit. A month without data counts as zero."
+    >
+      <div className="flex items-center gap-2">
+        <div className="w-40">
+          <Choice
+            value={months}
+            options={[
+              ['3', 'Last 3 months'],
+              ['6', 'Last 6 months'],
+              ['12', 'Last 12 months'],
+            ]}
+            onChange={setMonths}
+          />
+        </div>
+        <Button variant="outline" size="sm" disabled={busy} onClick={add}>
+          {busy ? 'Loading…' : 'Add lines'}
+        </Button>
+      </div>
+      {note && <p className="text-muted-foreground text-xs">{note}</p>}
+    </Section>
   );
 }
 
@@ -427,7 +487,7 @@ function newStep(kind: BudgetStep['kind'], envelopeId: string): BudgetStep {
   return { kind, envelopeId, whileLoan: null };
 }
 
-function StepsSection({ draft, set }: SectionProps) {
+function StepsSection({ draft, set, goals }: SectionProps & { goals: GoalOption[] }) {
   const steps = draft.steps;
   const setSteps = (next: BudgetStep[]) => set({ steps: next });
   const move = (i: number, by: number) => {
@@ -436,6 +496,10 @@ function StepsSection({ draft, set }: SectionProps) {
     setSteps(next);
   };
   const envelopes: [string, string][] = draft.envelopes.map((e) => [e.id, e.name]);
+  const goalOptions: [string, string][] = [
+    [NONE, 'Not linked'],
+    ...goals.map((g): [string, string] => [g.id, g.title]),
+  ];
   const loans: [string, string][] = [
     [NONE, 'Always'],
     ...draft.loans.map((l): [string, string] => [l.id, `While ${l.name} is open`]),
@@ -481,14 +545,34 @@ function StepsSection({ draft, set }: SectionProps) {
           )}
           {s.kind === 'fill' && (
             <>
-              <Field label="Target">
+              <Field label={s.goalId ? 'Target (from the goal)' : 'Target'}>
                 <NumberInput
                   value={s.target}
                   step={100}
                   onChange={(v) => setSteps(replace(steps, i, { target: v ?? 0 }))}
                 />
               </Field>
-              <div />
+              <Field label="Wealthfolio goal">
+                <Choice
+                  value={s.goalId ?? NONE}
+                  options={goalOptions}
+                  onChange={(v) => {
+                    const g = goals.find((x) => x.id === v);
+                    setSteps(
+                      steps.map((x, j) =>
+                        j === i
+                          ? {
+                              kind: 'fill',
+                              envelopeId: s.envelopeId,
+                              target: g?.targetAmount ?? s.target,
+                              ...(g && { goalId: g.id }),
+                            }
+                          : x,
+                      ),
+                    );
+                  }}
+                />
+              </Field>
             </>
           )}
           {s.kind === 'rest' && (

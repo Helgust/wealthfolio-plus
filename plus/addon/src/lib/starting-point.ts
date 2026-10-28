@@ -14,6 +14,7 @@ export interface WfAccount {
   name: string;
   /** Wealthfolio account type: CASH, SECURITIES, … */
   accountType: string;
+  currency: string;
   /** Wealthfolio valuation at the latest date */
   wfValue: number;
   /** Money without lots */
@@ -102,6 +103,7 @@ export async function loadPortfolio(ctx: AddonContext): Promise<LoadedPortfolio>
       id: a.id,
       name: a.name,
       accountType: a.accountType,
+      currency: a.currency,
       wfValue: valuations.find((v) => v.accountId === a.id)?.totalValueBase ?? 0,
       ...(await loadAccount(ctx, a.id)),
     })),

@@ -7,6 +7,7 @@
 // The server reports it stale when budgets differs from budgets.v1.
 // budgets.v1.draft — a budget proposed through MCP: { target: <budget id> | null (new), note,
 // createdAt, budget }. It reaches budgets.v1 only when the user accepts it here, after this schema.
+// budgets.v1.transfers — queue deposits already recorded in Wealthfolio, see loadRecorded.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { z } from 'zod';
 import { runBudget } from '../engine/budget';
@@ -163,3 +164,22 @@ export function applyDraft(book: BudgetBook, draft: BudgetDraft): BudgetBook {
 }
 
 export const discardDraft = (storage: Storage) => storage.delete(DRAFT_KEY);
+
+/**
+ * Queue deposits recorded as Wealthfolio transfers, as "<budget id>/<month>/<envelope id>": a month
+ * recorded twice would double the transfers in the user's data.
+ */
+const TRANSFERS_KEY = 'budgets.v1.transfers';
+
+export async function loadRecorded(storage: Storage): Promise<string[]> {
+  try {
+    const v: unknown = JSON.parse((await storage.get(TRANSFERS_KEY)) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Keeps the latest 1,000 keys: years of monthly transfers, well within the value limit. */
+export const saveRecorded = (storage: Storage, keys: string[]) =>
+  storage.set(TRANSFERS_KEY, JSON.stringify(keys.slice(-1000)));
