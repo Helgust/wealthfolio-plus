@@ -22,6 +22,7 @@ import {
   SymbolSearch,
   type AccountSelectOption,
 } from "./fields";
+import { Spinner } from "@wealthfolio/ui";
 
 export type AdjustmentMode = "cash" | "securities";
 
@@ -110,6 +111,23 @@ export const createAdjustmentFormSchema = (t?: TFunction) =>
         });
       }
 
+      if (isCostBasisAdjustment(data.subtype)) {
+        if (data.adjustmentMode !== "securities") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["assetId"],
+            message: msg(t, "activity:form.err_select_symbol", "Please select a symbol."),
+          });
+        }
+        if (!(data.amount != null && data.amount > 0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["amount"],
+            message: msg(t, "activity:form.err_enter_amount", "Please enter an amount."),
+          });
+        }
+      }
+
       if (data.subtype?.trim().toUpperCase() === ACTIVITY_SUBTYPES.OPTION_EXPIRY) {
         if (data.adjustmentMode !== "securities") {
           ctx.addIssue({
@@ -141,6 +159,15 @@ export const createAdjustmentFormSchema = (t?: TFunction) =>
         }
       }
     });
+
+/** RETURN_OF_CAPITAL / NOTIONAL_DISTRIBUTION: move an asset's cost basis by the amount. */
+function isCostBasisAdjustment(subtype: string | null | undefined): boolean {
+  const normalized = subtype?.trim().toUpperCase();
+  return (
+    normalized === ACTIVITY_SUBTYPES.RETURN_OF_CAPITAL ||
+    normalized === ACTIVITY_SUBTYPES.NOTIONAL_DISTRIBUTION
+  );
+}
 
 export const adjustmentFormSchema = createAdjustmentFormSchema();
 
@@ -213,7 +240,7 @@ export function AdjustmentForm({
       symbolInstrumentType?.trim().toUpperCase() === InstrumentType.OPTION || isCurrentOptionExpiry;
     const options: string[] = canSelectOptionExpiry
       ? [isCurrentOptionExpiry && currentSubtype ? currentSubtype : ACTIVITY_SUBTYPES.OPTION_EXPIRY]
-      : [];
+      : [ACTIVITY_SUBTYPES.RETURN_OF_CAPITAL, ACTIVITY_SUBTYPES.NOTIONAL_DISTRIBUTION];
     if (currentSubtype && !options.includes(currentSubtype)) {
       return [currentSubtype, ...options];
     }
@@ -231,7 +258,10 @@ export function AdjustmentForm({
       form.setValue("assetMetadata", undefined);
       form.setValue("quantity", null);
       form.setValue("unitPrice", null);
-      if (subtype?.trim().toUpperCase() === ACTIVITY_SUBTYPES.OPTION_EXPIRY) {
+      if (
+        subtype?.trim().toUpperCase() === ACTIVITY_SUBTYPES.OPTION_EXPIRY ||
+        isCostBasisAdjustment(subtype)
+      ) {
         form.setValue("subtype", null);
       }
     }
@@ -341,11 +371,11 @@ export function AdjustmentForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {isEditing
               ? t("activity:form.button_update")

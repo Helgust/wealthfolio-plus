@@ -51,9 +51,10 @@ export function grow(a: Account, rate: number): void {
 /**
  * Contribution to an account. A CASH account gets balance; otherwise buys pro rata to position
  * values (portfolio weights are kept), one new lot per position. An empty account gets a "New
- * contributions" position priced at 1.
+ * contributions" position priced at 1. merge — a lot bought on the same date is added to instead:
+ * the monthly savings of a year go into one lot per position (prices do not change within a year).
  */
-export function deposit(a: Account, amount: number, date: string): void {
+export function deposit(a: Account, amount: number, date: string, merge = false): void {
   if (amount <= 0) return;
   if (a.kind === 'cash') {
     a.cash += amount;
@@ -68,7 +69,12 @@ export function deposit(a: Account, amount: number, date: string): void {
   const sum = values.reduce((s, v) => s + v, 0);
   a.positions.forEach((p, i) => {
     const part = (amount * values[i]) / sum;
-    if (part > 0) p.lots.push({ date, units: part / p.price, cost: part });
+    if (part <= 0) return;
+    const last = p.lots.at(-1);
+    if (merge && last?.date === date) {
+      last.units += part / p.price;
+      last.cost += part;
+    } else p.lots.push({ date, units: part / p.price, cost: part });
   });
 }
 

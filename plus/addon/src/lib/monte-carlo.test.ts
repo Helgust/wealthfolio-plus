@@ -54,6 +54,26 @@ describe('Monte Carlo', () => {
     }
   });
 
+  it('spreads the month goals are reached; without volatility it is the deterministic month', async () => {
+    const withGoals: Plan = {
+      ...plan,
+      goals: [
+        { kind: 'account', id: 'fund', name: 'Fund', accountId: 'fund', target: { kind: 'amount', amount: 90_000 }, end: null },
+        { kind: 'account', id: 'cash', name: 'Cash', accountId: 'cash', target: null, end: null },
+      ],
+      savings: [{ from: { year: 2026, month: 1 }, amounts: { fund: 300, cash: 100 } }],
+    };
+    const deterministic = runPlan(withGoals, start).goalsReached.fund;
+    const flat = await runMonteCarlo(withGoals, start, { model: ZERO_VOLATILITY });
+    // Goals with no target have no date.
+    expect(flat.goals.map((g) => g.id)).toEqual(['fund']);
+    expect(flat.goals[0].reached).toBe(1);
+    for (const p of PERCENTILES) expect(flat.goals[0].months[p]).toBe(deterministic.year * 12 + deterministic.month - 1);
+    const random = await runMonteCarlo(withGoals, start);
+    const m = random.goals[0].months;
+    expect(m[10]!).toBeLessThan(m[90] ?? Infinity);
+  });
+
   it('is reproducible from the seed; percentiles are ordered', async () => {
     const a = await runMonteCarlo(plan, start);
     expect(await runMonteCarlo(plan, start)).toEqual(a);

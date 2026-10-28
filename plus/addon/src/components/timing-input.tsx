@@ -114,5 +114,6 @@ export function milestoneUses(plan: Plan, m: Milestone): string[] {
   plan.propertyPurchases.forEach((p) => at(p.timing) && uses.push(p.name));
   if (plan.rentals.some((r) => at(r.start) || at(r.end))) uses.push('a rental');
   plan.flows.forEach((f) => 'loanId' in f && at(f.until) && uses.push('a loan prepayment'));
+  plan.goals.forEach((g) => at(g.end) && uses.push(g.name));
   return uses;
 }

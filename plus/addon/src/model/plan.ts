@@ -1,7 +1,8 @@
 // Plan model: household, autónomo income, expenses; since phase 2 — account returns, surplus
 // flows and withdrawal order; since phase 3 — milestones, event timing, public pension; since
 // phase 4 — equity shares and Monte Carlo settings; since phase 5 — the period and the change over
-// time of event amounts, other incomes and one-time events. The Zod
+// time of event amounts, other incomes and one-time events; since phase 6 — savings goals and the
+// monthly savings schedule. The Zod
 // schema validates the plan read from storage: old or broken JSON must not silently turn into
 // zeros. New fields have defaults or are optional, and old ones are upgraded (upgradeLegacy), so
 // plans of earlier phases load without migration.
@@ -10,6 +11,8 @@ import { OwnerSchema } from './accounts';
 
 const money = z.number().finite().min(0);
 const rate = z.number().finite().min(-0.5).max(0.5);
+/** A month of the year, 1 — January */
+const monthOfYear = z.number().int().min(1).max(12);
 const year = z.number().int().min(1900).max(2200);
 const age = z.number().int().min(0).max(120);
 /** Index of a person in the plan */
@@ -116,6 +119,8 @@ export const IncomeSchema = z.object({
   per: PeriodSchema.optional(),
   /** Absent — with inflation */
   growth: GrowthSchema.optional(),
+  /** A salary's payments a year: 14 — with the pagas extra of June and December; absent — 12 */
+  pagas: z.union([z.literal(12), z.literal(14)]).optional(),
   /** null — from the plan's first year */
   start: TimingSchema.nullable(),
   /** null — until the end of the plan */
@@ -128,6 +133,8 @@ const oneTimeFields = {
   /** The amount is in nominal euros of the year it happens; otherwise in first-year prices */
   nominal: z.boolean(),
   at: TimingSchema,
+  /** The month it happens in; absent — spread over the year */
+  month: monthOfYear.optional(),
   /** Again every `every` years from `at`, up to (not including) `until`; null — once */
   repeat: z
     .object({ every: z.number().int().min(1).max(50), until: TimingSchema.nullable() })
@@ -232,15 +239,30 @@ export const PropertySaleSchema = z.object({
 });
 
 /**
- * Purchase of a home. The purchase tax (ITP for a second-hand home, IVA + AJD for a new one) is
- * paid on top of the price; the mortgage is an annuity from the next year.
+ * Notaría, registro, gestoría and tasación of a purchase: a share of the price, or an amount in
+ * first-year prices.
+ */
+export const PurchaseCostsSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('percent'), rate: z.number().finite().min(0).max(0.2) }),
+  z.object({ kind: z.literal('amount'), amount: money }),
+]);
+
+/**
+ * Purchase of a home. The purchase tax (ITP for a second-hand home, IVA + AJD for a new one) and
+ * the costs are paid on top of the price; the mortgage is an annuity from the month after the
+ * purchase — without a month, the purchase is at the end of the year and the mortgage is paid from
+ * the next one.
  */
 export const PropertyPurchaseSchema = z.object({
   id: z.string().min(1).max(40),
   name: z.string().min(1).max(60),
   timing: TimingSchema,
+  /** The month of the purchase; absent — the end of the year */
+  month: monthOfYear.optional(),
   /** First-year prices */
   price: money,
+  /** Absent — none */
+  costs: PurchaseCostsSchema.optional(),
   newBuild: z.boolean(),
   habitual: z.boolean(),
   owner: OwnerSchema,
@@ -249,6 +271,9 @@ export const PropertyPurchaseSchema = z.object({
   /** Comunidad and insurance per year from the next year, first-year prices */
   community: money.optional(),
   insurance: money.optional(),
+  /** The months IBI and insurance are paid in; absent — spread over the year */
+  ibiMonth: monthOfYear.optional(),
+  insuranceMonth: monthOfYear.optional(),
   /** Share of the building in the value, without the land: for the amortización of a rental */
   constructionShare: share.optional(),
   mortgage: z
@@ -325,6 +350,76 @@ export const PrepayFlowSchema = z.object({
 });
 
 export const FlowSchema = z.union([AccountFlowSchema, PrepayFlowSchema]);
+
+/** A month of the plan: the calendar year and the month, 1 — January. */
+export const YearMonthSchema = z.object({ year, month: z.number().int().min(1).max(12) });
+
+/**
+ * Where the monthly savings go. account — into a modelled account; with a target, while its balance
+ * is below the target (again once it falls below it), without one — while the goal has an amount
+ * in the schedule. A pension plan takes no more than the year's deductible room. loan — amortización
+ * anticipada until the loan is repaid. A goal stops receiving from the year of end.
+ */
+export const AccountGoalSchema = z.object({
+  kind: z.literal('account'),
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(60),
+  accountId: z.string().min(1),
+  /**
+   * Target balance of the account: an amount in nominal euros, or the down payment of a purchase in
+   * the plan — price − mortgage + purchase tax + costs, at the year's prices; the goal pays it at the
+   * purchase and ends. null — no target.
+   */
+  target: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('amount'), amount: money }),
+      z.object({ kind: z.literal('purchase'), purchaseId: z.string().min(1) }),
+    ])
+    .nullable(),
+  /** null — never stops */
+  end: TimingSchema.nullable(),
+});
+
+/**
+ * When a loan goal's money goes to the loan: monthly — every month, as saved; threshold — once the
+ * money held for it reaches amount (nominal euros); months — in these months of every year. Until
+ * then it is held apart: cash in net worth, not touched by the withdrawal order.
+ */
+export const LoanPrepaySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('monthly') }),
+  z.object({ kind: z.literal('threshold'), amount: money }),
+  z.object({ kind: z.literal('months'), months: z.array(z.number().int().min(1).max(12)).min(1).max(12) }),
+]);
+
+/**
+ * Amortización anticipada from the savings, after the month's payment: term — reducir plazo, the
+ * payment stays and the loan ends sooner; payment — reducir cuota, the payment falls. The fee is
+ * paid on top, out of the goal's money. Reached when the loan is repaid.
+ */
+export const LoanGoalSchema = z.object({
+  kind: z.literal('loan'),
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(60),
+  /** A Wealthfolio liability id or mortgage:<purchase id> */
+  loanId: z.string().min(1),
+  effect: z.enum(['term', 'payment']),
+  /** Comisión por amortización anticipada, share of the amount prepaid */
+  fee: z.number().finite().min(0).max(0.05),
+  prepay: LoanPrepaySchema,
+  /** null — until the loan is repaid */
+  end: TimingSchema.nullable(),
+});
+
+export const GoalSchema = z.discriminatedUnion('kind', [AccountGoalSchema, LoanGoalSchema]);
+
+/**
+ * Savings from a month on, until the next step: nominal euros a month for each goal id. The
+ * month's savings are their sum; a goal that cannot take its amount leaves it to the other goals.
+ */
+export const SavingsStepSchema = z.object({
+  from: YearMonthSchema,
+  amounts: z.record(z.string().min(1), money),
+});
 
 /** Template values: the user sets their own allocation. */
 export const DEFAULT_EQUITY_SHARE: EquityShare = { fund: 1, brokerage: 1, pension: 0.5 };
@@ -414,13 +509,51 @@ const PlanObject = z
     taxPayment: z.enum(['sameYear', 'nextYear']).default('sameYear'),
     /** The renta of the year before the plan: paid (> 0) or refunded (< 0) in the first year; nextYear only */
     priorYearTax: z.number().finite().min(-1e7).max(1e7).default(0),
+    /**
+     * When the renta to pay is paid (nextYear): in June, or split — 60 % in June and 40 % in
+     * November. A refund comes in June.
+     */
+    renta: z.enum(['june', 'split']).default('june'),
     propertySales: z.array(PropertySaleSchema).max(10).default([]),
     propertyPurchases: z.array(PropertyPurchaseSchema).max(10).default([]),
     rentals: z.array(RentalSchema).max(10).default([]),
+    goals: z.array(GoalSchema).max(20).default([]),
+    /** Steps of the monthly savings, in order of their start month */
+    savings: z.array(SavingsStepSchema).max(60).default([]),
   })
   .refine((p) => p.filing === 'individual' || p.people.length === 2, {
     message: 'Joint filing needs two people',
     path: ['filing'],
+  })
+  .superRefine((p, ctx) => {
+    const ids = new Set<string>();
+    const targets = new Set<string>();
+    p.goals.forEach((g, i) => {
+      if (ids.has(g.id)) ctx.addIssue({ code: 'custom', message: 'Goal ids must be unique', path: ['goals', i, 'id'] });
+      ids.add(g.id);
+      const target = g.kind === 'account' ? `account:${g.accountId}` : `loan:${g.loanId}`;
+      if (targets.has(target)) {
+        ctx.addIssue({ code: 'custom', message: `One goal per ${g.kind}`, path: ['goals', i] });
+      }
+      targets.add(target);
+    });
+    p.goals.forEach((g, i) => {
+      if (g.kind === 'account' && g.target?.kind === 'purchase') {
+        const { purchaseId } = g.target;
+        if (!p.propertyPurchases.some((pp) => pp.id === purchaseId)) {
+          ctx.addIssue({ code: 'custom', message: `No purchase ${purchaseId}`, path: ['goals', i, 'target'] });
+        }
+      }
+    });
+    p.savings.forEach((s, i) => {
+      const prev = p.savings[i - 1];
+      if (prev && monthIndex(prev.from) >= monthIndex(s.from)) {
+        ctx.addIssue({ code: 'custom', message: 'Savings steps must start in later months', path: ['savings', i, 'from'] });
+      }
+      for (const id of Object.keys(s.amounts)) {
+        if (!ids.has(id)) ctx.addIssue({ code: 'custom', message: `No goal ${id}`, path: ['savings', i, 'amounts'] });
+      }
+    });
   });
 
 export const PlanSchema = z.preprocess(upgradeLegacy, PlanObject);
@@ -434,6 +567,7 @@ export type PublicPension = z.infer<typeof PublicPensionSchema>;
 export type SpendingRule = z.infer<typeof SpendingRuleSchema>;
 export type PropertySale = z.infer<typeof PropertySaleSchema>;
 export type PropertyPurchase = z.infer<typeof PropertyPurchaseSchema>;
+export type PurchaseCosts = z.infer<typeof PurchaseCostsSchema>;
 export type Rental = z.infer<typeof RentalSchema>;
 export type Person = z.infer<typeof PersonSchema>;
 export type Child = z.infer<typeof ChildSchema>;
@@ -447,8 +581,17 @@ export type MonteCarlo = z.infer<typeof MonteCarloSchema>;
 export type AccountFlow = z.infer<typeof AccountFlowSchema>;
 export type PrepayFlow = z.infer<typeof PrepayFlowSchema>;
 export type Flow = z.infer<typeof FlowSchema>;
+export type YearMonth = z.infer<typeof YearMonthSchema>;
+export type AccountGoal = z.infer<typeof AccountGoalSchema>;
+export type LoanGoal = z.infer<typeof LoanGoalSchema>;
+export type LoanPrepay = z.infer<typeof LoanPrepaySchema>;
+export type Goal = z.infer<typeof GoalSchema>;
+export type SavingsStep = z.infer<typeof SavingsStepSchema>;
 
 export const isPrepay = (f: Flow): f is PrepayFlow => 'loanId' in f;
+
+/** Months since year 0: orders months and counts the months between them. */
+export const monthIndex = (m: YearMonth) => m.year * 12 + m.month - 1;
 export type Plan = z.infer<typeof PlanSchema>;
 export type Filing = Plan['filing'];
 
@@ -513,9 +656,12 @@ export function defaultPlan(startYear: number): Plan {
     taxRules: 'frozen',
     taxPayment: 'sameYear',
     priorYearTax: 0,
+    renta: 'june',
     propertySales: [],
     propertyPurchases: [],
     rentals: [],
+    goals: [],
+    savings: [],
   };
 }
 

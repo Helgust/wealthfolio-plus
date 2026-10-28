@@ -11,7 +11,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react';
 import { WITH_INFLATION, type Income, type IncomeTax, type OneTime, type Plan } from '../model/plan';
 import { AmountInput, GrowthInput } from './amount-input';
-import { Field, NumberInput } from './form-fields';
+import { Field, MonthSelect, NumberInput } from './form-fields';
 import { TimingInput } from './timing-input';
 
 interface SectionProps {
@@ -114,6 +114,25 @@ export function IncomesEditor({ draft, set }: SectionProps) {
           <Field label="Change per year, %">
             <GrowthInput value={inc.growth ?? WITH_INFLATION} onChange={(growth) => setIncome(i, { growth })} />
           </Field>
+          {inc.tax === 'trabajo' && (
+            <>
+              <Field label="Paid in">
+                <Select
+                  value={String(inc.pagas ?? 12)}
+                  onValueChange={(v) => setIncome(i, { pagas: v === '14' ? 14 : undefined })}
+                >
+                  <SelectTrigger style={{ minWidth: 0 }}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="12">12 payments</SelectItem>
+                    <SelectItem value="14">14 pagas (extra in June and December)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div />
+            </>
+          )}
           <Field label="Starts">
             <TimingInput value={inc.start} plan={draft} noneLabel="Plan start" onChange={(t) => setIncome(i, { start: t })} />
           </Field>
@@ -146,12 +165,12 @@ const WHAT_LABEL: Record<string, string> = {
 const whatOf = (e: OneTime) => (e.type === 'expense' ? `expense:${e.kind}` : `income:${e.tax}`);
 
 function withWhat(e: OneTime, what: string): OneTime {
-  const { name, amount, nominal, at, repeat } = e;
+  const { name, amount, nominal, at, month, repeat } = e;
   const [type, sub] = what.split(':');
   if (type === 'expense') {
-    return { type: 'expense', name, amount, nominal, at, repeat, kind: sub as 'essential' | 'discretionary' };
+    return { type: 'expense', name, amount, nominal, at, month, repeat, kind: sub as 'essential' | 'discretionary' };
   }
-  return { type: 'income', name, amount, nominal, at, repeat, person: e.type === 'income' ? e.person : 0, tax: sub as IncomeTax };
+  return { type: 'income', name, amount, nominal, at, month, repeat, person: e.type === 'income' ? e.person : 0, tax: sub as IncomeTax };
 }
 
 const newOneTime = (plan: Plan): OneTime => ({
@@ -173,7 +192,8 @@ export function OneTimeEditor({ draft, set, titled }: SectionProps) {
       {titled && <h3 className="font-medium">One-time events</h3>}
       <p className="text-muted-foreground text-xs">
         An expense or an income in one year, maybe again every few years: a car, a renovation, an inheritance. In
-        first-year euros it grows with inflation up to its year; nominal euros are the amount of that year.
+        first-year euros it grows with inflation up to its year; nominal euros are the amount of that year. The month
+        places it in the monthly cash flow; without one it is spread over the year.
       </p>
       {draft.oneTime.map((e, i) => (
         <div key={i} className="grid grid-cols-2 items-end gap-2 rounded-md border p-3">
@@ -229,7 +249,14 @@ export function OneTimeEditor({ draft, set, titled }: SectionProps) {
             <div />
           )}
           <Field label="When">
-            <TimingInput value={e.at} plan={draft} onChange={(t) => t && setEvent(i, { ...e, at: t })} />
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <TimingInput value={e.at} plan={draft} onChange={(t) => t && setEvent(i, { ...e, at: t })} />
+              </div>
+              <div style={{ width: 130, flex: 'none' }}>
+                <MonthSelect value={e.month} onChange={(month) => setEvent(i, { ...e, month })} />
+              </div>
+            </div>
           </Field>
           <Field label="Repeats every, years (empty — once)">
             <NumberInput

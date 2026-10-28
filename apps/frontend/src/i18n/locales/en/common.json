@@ -304,6 +304,8 @@
     "screenshot_alt": "Screenshot {{number}}",
     "downloading_update": "Downloading update...",
     "installing_update": "Installing update...",
+    "update_external_flatpak": "This copy of Wealthfolio was installed with Flatpak. Update it with Flatpak or your software center.",
+    "update_external_package_manager": "This installation can't be updated from within Wealthfolio. Update it the same way you installed it.",
     "update_failed": "Update failed. Please try again.",
     "remind_me_later": "Remind me later",
     "view_changelog": "View Changelog",
@@ -371,6 +373,8 @@
     "opening": "Opening Wealthfolio…",
     "locking": "Locking Wealthfolio…",
     "lockFailed": "Couldn’t finish locking",
+    "connectionFailed": "Connection interrupted",
+    "signInAgain": "Sign in again",
     "switch": "Switch profile",
     "welcome": "Welcome, {{name}}",
     "continue": "Continue",
@@ -482,9 +486,12 @@
       "cooldownUnknown": "Too many attempts. Wait a moment before trying again.",
       "startupFailed": "The server couldn’t open this profile. Retry, or ask the server administrator to check the startup error.",
       "sessionInterrupted": "Your profile session was interrupted. Retry to reopen it.",
+      "connectionFailed": "Unable to verify your profile. Check your connection and retry.",
+      "authRequired": "Your sign-in session could not be verified. Reload to sign in again.",
       "unavailable": "We couldn’t open this profile. Restart Wealthfolio and try again.",
       "inUse": "This profile is open in another Wealthfolio window. Close it there and try again.",
       "credentials": "We couldn’t access your saved sign-in details. Unlock your device and try again.",
+      "serverCredentials": "The server couldn’t access its secrets file (secrets.json). Ask the server administrator to check that WF_SECRET_KEY matches the key the file was created with and that the server can read and write the file.",
       "invalid": "Check the profile details and try again.",
       "name": "Use a profile name of 1–60 characters.",
       "avatar": "Choose one of the available avatars.",
@@ -500,5 +507,9 @@
       "teamChanged": "Your household has changed. Reconnect Wealthfolio Connect to continue.",
       "rebind": "Reconnect Wealthfolio Connect to confirm this profile’s account and household."
     }
-  }
+  },
+  "remove": "Remove",
+  "remove_item": "Remove {{name}}",
+  "actions_for": "Actions for {{name}}",
+  "settings_for": "{{name}} settings"
 }

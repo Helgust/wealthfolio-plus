@@ -61,6 +61,7 @@ export function yearFlows(row: LedgerRow, mode: ValueMode = 'nominal'): YearFlow
     item('rentalRepairs', 'Repairs of homes let', 'spending', re.rentalRepairs),
     item('loanInterest', 'Loan interest', 'spending', re.loanInterest),
     item('prepaymentFees', 'Prepayment fees', 'spending', re.prepaymentFees),
+    item('purchaseFees', 'Purchase costs (notary, registry…)', 'spending', re.purchaseFees),
     item('toCash', 'To cash', 'saving', d.cash),
     item('toFund', 'To fondos', 'saving', d.fund),
     item('toBrokerage', 'To brokerage', 'saving', d.brokerage),

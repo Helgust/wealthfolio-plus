@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
 import type { Account } from '../engine/portfolio';
 import type { Loan, Property } from '../engine/real-estate';
 import { withdrawalOrder, type PlanResult } from '../engine/run-plan';
-import { formatMoney, formatPercent } from '../lib/format';
+import { stepTotal } from '../engine/savings';
+import { formatMoney, formatMonth, formatPercent, MONTH_NAMES } from '../lib/format';
 import { KIND_LABEL } from '../model/accounts';
 import {
   autonomoGrowth,
@@ -88,6 +89,7 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
   const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? 'Missing account';
   const loanName = (id: string) => loanOptions(plan, loans).find((l) => l.id === id)?.name ?? 'a missing loan';
   const sink = accounts.find((a) => a.kind === 'cash');
+  const purchaseName = (id: string) => plan.propertyPurchases.find((p) => p.id === id)?.name ?? 'a missing purchase';
 
   function oneTimeWhen(e: OneTime): string {
     const at = timingLabel(e.at, plan, years);
@@ -266,6 +268,53 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
         <div className="text-muted-foreground text-xs">Pension plans from age {plan.pensionAccessAge}.</div>
       </PlanCard>
 
+      <PlanCard title="Savings goals" onEdit={() => onEdit('goals')}>
+        {plan.goals.length === 0 && (
+          <Empty>No goals: a cushion, a down payment, a fund to save into, a loan to prepay each month.</Empty>
+        )}
+        {plan.goals.map((g) => {
+          const reached = result.goalsReached[g.id];
+          const what =
+            g.kind === 'loan'
+              ? `prepay ${loanName(g.loanId)}, ${EFFECT_LABEL[g.effect].toLowerCase()}`
+              : `${accountName(g.accountId)}${
+                  !g.target
+                    ? ', no target'
+                    : g.target.kind === 'amount'
+                      ? `, up to ${money(g.target.amount)}`
+                      : `, down payment of ${purchaseName(g.target.purchaseId)}`
+                }`;
+          const open = g.kind === 'account' && !g.target;
+          return (
+            <Line
+              key={g.id}
+              main={
+                <>
+                  <span className="font-medium">{g.name}</span>
+                  <span className="text-muted-foreground"> · {what}</span>
+                </>
+              }
+              detail={
+                open
+                  ? g.end
+                    ? `stops ${timingLabel(g.end, plan, years)}`
+                    : ''
+                  : reached
+                    ? `${g.kind === 'loan' ? 'repaid' : 'reached'} ${formatMonth(reached.year, reached.month)}`
+                    : `not ${g.kind === 'loan' ? 'repaid' : 'reached'}`
+              }
+            />
+          );
+        })}
+        {plan.savings.map((s, i) => (
+          <Line
+            key={`step${i}`}
+            main={`${money(stepTotal(s))} a month`}
+            detail={`from ${formatMonth(s.from.year, s.from.month)}`}
+          />
+        ))}
+      </PlanCard>
+
       <PlanCard title="Real estate" onEdit={() => onEdit('realEstate')}>
         {properties.length + loans.length + plan.propertyPurchases.length + plan.rentals.length === 0 && (
           <Empty>No modelled real estate. Set a use for Wealthfolio properties on the Accounts tab, or plan a purchase.</Empty>
@@ -317,7 +366,7 @@ export function PlanTab({ plan, result, accounts, properties, loans, currency, o
           <Line
             key={p.id}
             main={`Buy ${p.name} · ${money(p.price)}${p.mortgage ? `, mortgage ${money(p.mortgage.amount)} ${mortgageRate(p.mortgage)}` : ''}`}
-            detail={`${timingLabel(p.timing, plan, years)} · ${p.newBuild ? 'new' : 'second-hand'}${p.habitual ? ', vivienda habitual' : ''}`}
+            detail={`${p.month ? `${MONTH_NAMES[p.month - 1]} ` : ''}${timingLabel(p.timing, plan, years)} · ${p.newBuild ? 'new' : 'second-hand'}${p.habitual ? ', vivienda habitual' : ''}`}
           />
         ))}
       </PlanCard>

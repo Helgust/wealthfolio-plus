@@ -16,6 +16,7 @@ import { Play, Settings2 } from 'lucide-react';
 import type { LedgerRow, StartingPoint } from '../engine/run-plan';
 import { useMonteCarloRun, type MonteCarloStore } from '../hooks/use-monte-carlo';
 import { formatMoney, formatPercent, type ValueMode } from '../lib/format';
+import { formatMonthIndex } from '../lib/goals';
 import { PERCENTILES, type MonteCarloResult } from '../lib/monte-carlo';
 import type { Plan } from '../model/plan';
 import { MonteCarloChart } from './monte-carlo-chart';
@@ -78,6 +79,34 @@ function Results({
         />
       </div>
       <MonteCarloChart result={result} rows={rows} currency={currency} mode={mode} />
+      {result.goals.length > 0 && (
+        <div className="overflow-x-auto rounded-md border">
+          <Table className="text-xs">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Goal reached</TableHead>
+                <TableHead className="text-right">In trials</TableHead>
+                <TableHead className="text-right">Early (10th)</TableHead>
+                <TableHead className="text-right">Median</TableHead>
+                <TableHead className="text-right">Late (90th)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.goals.map((g) => (
+                <TableRow key={g.id}>
+                  <TableCell>{g.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatPercent(g.reached)}</TableCell>
+                  {([10, 50, 90] as const).map((p) => (
+                    <TableCell key={p} className="text-right tabular-nums">
+                      {g.months[p] === null ? `not by ${lastYear}` : formatMonthIndex(g.months[p]!)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-md border">
         <Table className="text-xs">
           <TableHeader>
@@ -141,7 +170,8 @@ export function MonteCarloTab({ plan, start, rows, store, currency, mode, onSett
         {run?.error && <p className="text-destructive text-sm">{run.error}</p>}
         {run?.result && <Results result={run.result} ms={run.ms} rows={rows} currency={currency} mode={mode} />}
         <p className="text-muted-foreground text-xs">
-          A trial succeeds when the accounts cover every year without a shortfall. Volatility and
+          A trial succeeds when the accounts cover every year without a shortfall. Goals reached by the market's
+          luck — a target in a fund, a variable-rate loan, the free money after taxes — spread over the trials. Volatility and
           correlations are ignidash's defaults from US data (NYU Stern) until the calibration on euro
           data.
         </p>

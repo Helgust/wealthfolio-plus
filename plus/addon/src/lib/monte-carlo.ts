@@ -4,13 +4,24 @@
 import { endYear, runPlan, type LedgerRow, type PlanResult, type StartingPoint } from '../engine/run-plan';
 import { mulberry32, trialSeed } from '../engine/random';
 import { IGNIDASH_MODEL, stochasticPath, type MarketModel } from '../engine/stochastic-market';
-import type { Plan } from '../model/plan';
+import type { Goal, Plan } from '../model/plan';
+import { goalMonth } from './goals';
 
 export const PERCENTILES = [10, 25, 50, 75, 90] as const;
 export type Percentile = (typeof PERCENTILES)[number];
 
 /** Net worth by plan year at each percentile across trials */
 export type Bands = Record<Percentile, number[]>;
+
+/** When a goal is reached across trials. */
+export interface GoalSpread {
+  id: string;
+  name: string;
+  /** Share of trials in which it is reached within the plan */
+  reached: number;
+  /** Month index (lib/goals.ts) at each percentile of the trials; null — not reached by the end */
+  months: Record<Percentile, number | null>;
+}
 
 export interface MonteCarloResult {
   trials: number;
@@ -20,7 +31,12 @@ export interface MonteCarloResult {
   nominal: Bands;
   /** In first-year euros: each trial by its own deflator */
   real: Bands;
+  /** Goals with a date: a target or a loan to repay */
+  goals: GoalSpread[];
 }
+
+/** Goals that are reached at some date: a target balance, a down payment, a loan repaid. */
+const dated = (g: Goal) => g.kind === 'loan' || g.target !== null;
 
 export interface RunOptions {
   signal?: AbortSignal;
@@ -65,16 +81,21 @@ export async function runMonteCarlo(
   const years = endYear(plan) - plan.startYear + 1;
   const nominal = Array.from({ length: years }, () => new Float64Array(n));
   const real = Array.from({ length: years }, () => new Float64Array(n));
+  const goals = plan.goals.filter(dated);
+  /** Month each goal is reached in each trial; Infinity — not reached */
+  const reachedAt = goals.map(() => new Float64Array(n));
   let successes = 0;
   for (let i = 0; i < n; ) {
     signal?.throwIfAborted();
     const began = performance.now();
     do {
-      const rows = runTrial(plan, start, i, model).rows;
+      const result = runTrial(plan, start, i, model);
+      const rows = result.rows;
       rows.forEach((r, t) => {
         nominal[t][i] = r.netWorth;
         real[t][i] = r.netWorth / r.deflator;
       });
+      goals.forEach((g, k) => (reachedAt[k][i] = goalMonth(result, g) ?? Infinity));
       if (succeeded(rows)) successes++;
       i++;
     } while (i < n && performance.now() - began < sliceMs);
@@ -88,5 +109,14 @@ export async function runMonteCarlo(
     years: Array.from({ length: years }, (_, t) => plan.startYear + t),
     nominal: bands(nominal),
     real: bands(real),
+    goals: goals.map((g, k) => {
+      const sorted = reachedAt[k].sort();
+      const months = {} as Record<Percentile, number | null>;
+      for (const p of PERCENTILES) {
+        const m = percentileOf(sorted, p);
+        months[p] = Number.isFinite(m) ? m : null;
+      }
+      return { id: g.id, name: g.name, reached: sorted.filter(Number.isFinite).length / n, months };
+    }),
   };
 }

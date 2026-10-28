@@ -37,6 +37,7 @@ import {
 } from '../model/plan';
 import { AmountInput, GrowthInput, PeriodSelect } from './amount-input';
 import { Field, NumberInput, PercentInput } from './form-fields';
+import { GoalsEditor } from './goals-editor';
 import { IncomesEditor, OneTimeEditor } from './income-editor';
 import { InvestmentsEditor } from './investments-editor';
 import { RealEstateEditor } from './real-estate-editor';
@@ -49,6 +50,7 @@ export type EditorSection =
   | 'expenses'
   | 'oneTime'
   | 'investments'
+  | 'goals'
   | 'realEstate'
   | 'monteCarlo';
 
@@ -59,6 +61,7 @@ const TITLES: Record<EditorSection, string> = {
   expenses: 'Household expenses',
   oneTime: 'One-time events',
   investments: 'Returns, flows and withdrawals',
+  goals: 'Savings goals',
   realEstate: 'Real estate: sales, purchases and rentals',
   monteCarlo: 'Monte Carlo',
 };
@@ -69,7 +72,7 @@ interface Props {
   section: EditorSection | null;
   onClose: () => void;
   onSave: (plan: Plan) => Promise<void>;
-  /** Modelled accounts — for flows and the withdrawal order */
+  /** Modelled accounts — for flows, the withdrawal order and savings goals */
   accounts: Account[];
   /** Modelled properties — the ones a plan can sell */
   properties: Property[];
@@ -84,7 +87,9 @@ export function PlanEditor({ plan, section, onClose, onSave, accounts, propertie
         <SheetHeader>
           <SheetTitle>{TITLES[section ?? 'all']}</SheetTitle>
           <SheetDescription>
-            Amounts are in euros of the plan's first year, per year unless a period is chosen.
+            {section === 'goals'
+              ? 'Savings and targets are nominal euros.'
+              : "Amounts are in euros of the plan's first year, per year unless a period is chosen."}
           </SheetDescription>
         </SheetHeader>
         {/* The form mounts on open, so the draft always starts from the plan. */}
@@ -175,6 +180,7 @@ function PlanForm({
     show('expenses') && <ExpensesSection key="expenses" draft={draft} set={set} titled={section === 'all'} />,
     show('oneTime') && <OneTimeEditor key="oneTime" draft={draft} set={set} titled={section === 'all'} />,
     show('investments') && <InvestmentsEditor key="investments" draft={draft} set={set} accounts={accounts} loans={loans} />,
+    show('goals') && <GoalsEditor key="goals" draft={draft} set={set} accounts={accounts} loans={loans} />,
     show('realEstate') && <RealEstateEditor key="realEstate" draft={draft} set={set} properties={properties} />,
     show('monteCarlo') && <MonteCarloSection key="monteCarlo" draft={draft} set={set} titled={section === 'all'} />,
   ].filter(Boolean);
@@ -261,9 +267,22 @@ function HouseholdSection({ draft, set }: SectionProps) {
           </Select>
         </Field>
         {draft.taxPayment === 'nextYear' && (
-          <Field label="Last renta: to pay (+) or refund (−)">
-            <NumberInput value={draft.priorYearTax} step={100} onChange={(v) => set({ priorYearTax: v ?? 0 })} />
-          </Field>
+          <>
+            <Field label="Last renta: to pay (+) or refund (−)">
+              <NumberInput value={draft.priorYearTax} step={100} onChange={(v) => set({ priorYearTax: v ?? 0 })} />
+            </Field>
+            <Field label="Renta to pay, paid">
+              <Select value={draft.renta} onValueChange={(v) => set({ renta: v as Plan['renta'] })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="june">In June</SelectItem>
+                  <SelectItem value="split">60 % June, 40 % November</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </>
         )}
         <Field label={`Tax thresholds after ${availableYears().at(-1)}`}>
           <Select value={draft.taxRules} onValueChange={(v) => set({ taxRules: v as Plan['taxRules'] })}>

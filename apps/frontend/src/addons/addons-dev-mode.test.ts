@@ -1,11 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { registerDevAddonManifest } from "@/adapters";
+
 vi.mock("@/adapters", () => ({
   logger: {
     error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
   },
+  registerDevAddonManifest: vi.fn(),
+  unregisterDevAddonManifest: vi.fn(),
 }));
 
 import {
@@ -73,6 +77,7 @@ describe("development addon reloads", () => {
 
     const firstReload = manager.reloadAddon(addonId);
     const overlappingReload = manager.reloadAddon(addonId);
+    await Promise.resolve();
     expect(fetchRuntimePackage).toHaveBeenCalledTimes(1);
 
     rejectPackage(new Error("test reload failure"));
@@ -84,34 +89,31 @@ describe("development addon reloads", () => {
     fetchRuntimePackage.mockRestore();
     manager.devServers.delete(addonId);
   });
-});
 
-describe("development addon contributions", () => {
-  it("restores dev addon sidebar links after the installed-addon reload clears them", async () => {
-    const { clearAllContributions, getDurableNavItems } = await import("./contribution-registry");
-    const manager = addonDevManager as unknown as { devServers: Map<string, unknown> };
-    const addonId = "reingest-test";
-    manager.devServers.set(addonId, {
-      id: addonId,
-      name: "Reingest test",
-      url: "http://localhost:3001",
-      port: 3001,
-      status: "running",
-      manifest: {
-        id: addonId,
-        contributes: {
-          routes: [{ id: addonId }],
-          links: { sidebar: [{ id: addonId, route: addonId, label: "Reingest test" }] },
-        },
-      },
-    });
+  it("registers the manifest before running the addon and fails the load if that fails", async () => {
+    const manager = addonDevManager as unknown as {
+      activateRuntimePackage: (server: unknown, runtimePackage: unknown) => Promise<void>;
+      executeAddonCode: (...args: unknown[]) => Promise<void>;
+    };
+    const manifest = { id: "dev-network-test", name: "Dev network test", version: "1.0.0" };
+    const runtimePackage = {
+      generation: 1,
+      manifest,
+      files: [{ name: "addon.js", content: "", isMain: true }],
+      assets: [],
+    };
+    const executeAddonCode = vi.spyOn(manager, "executeAddonCode").mockResolvedValue();
+    vi.mocked(registerDevAddonManifest).mockRejectedValueOnce(new Error("Invalid addon id"));
 
-    // loadInstalledAddons() rebuilds the durable layer from scratch.
-    clearAllContributions();
-    addonDevManager.reingestContributions();
+    await expect(
+      manager.activateRuntimePackage(
+        { id: manifest.id, url: "http://localhost:3001", status: "running" },
+        runtimePackage,
+      ),
+    ).rejects.toThrow("Invalid addon id");
+    expect(registerDevAddonManifest).toHaveBeenCalledWith(manifest);
+    expect(executeAddonCode).not.toHaveBeenCalled();
 
-    expect(getDurableNavItems().map((item) => item.title)).toContain("Reingest test");
-    manager.devServers.delete(addonId);
-    clearAllContributions();
+    executeAddonCode.mockRestore();
   });
 });

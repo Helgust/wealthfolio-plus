@@ -308,6 +308,111 @@ describe('cash flow of a year', () => {
     expectBalanced(rows, start);
   });
 
+  it('adds up with savings goals, a pension goal and years short of money', () => {
+    const start: StartingPoint = {
+      netWorth: 60_000,
+      accounts: [
+        cashAccount(20_000),
+        cashAccount(0, 'cushion'),
+        investAccount('fund', 'fund', 10, 2_000, 15_000),
+        investAccount('ppi', 'ppi', 1, 20_000, 20_000),
+      ],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      withdrawalOrder: ['cushion', 'cash', 'fund'],
+      goals: [
+        { kind: 'account', id: 'cushion', name: 'Cushion', accountId: 'cushion', target: { kind: 'amount', amount: 6_000 }, end: null },
+        { kind: 'account', id: 'fund', name: 'Fund', accountId: 'fund', target: null, end: { kind: 'milestone', id: 'retirement' } },
+        { kind: 'account', id: 'ppi', name: 'Pension', accountId: 'ppi', target: null, end: null },
+      ],
+      savings: [
+        { from: { year: 2026, month: 4 }, amounts: { cushion: 500, fund: 300, ppi: 200 } },
+        { from: { year: 2030, month: 1 }, amounts: { fund: 800, ppi: 150 } },
+      ],
+      flows: [{ accountId: 'ppi', mode: 'max', amount: 0 }],
+      oneTime: [
+        { type: 'expense', name: 'Roof', kind: 'essential', amount: 40_000, nominal: false, at: { kind: 'year', year: 2031 }, repeat: null },
+      ],
+    };
+    const rows = runPlan(p, start).rows;
+    // About 400 € free a month: less than the 1 000 € planned.
+    expect(rows[0].savings!.planned).toBe(9_000);
+    expect(rows[0].savings!.deficit).toBeGreaterThan(0);
+    expect(rows.find((r) => r.year === 2031)!.savings!.saved).toBe(0);
+    expect(rows.some((r) => r.savings!.goals.ppi.saved > 0 && r.pensionContributions > 0)).toBe(true);
+    expectBalanced(rows, start);
+    // IRPF paid the next year: the savings do not change how the renta works.
+    expectBalanced(runPlan({ ...p, taxPayment: 'nextYear' }, start).rows, start);
+  });
+
+  it('adds up with loan goals: prepaid every month, from held money, and a prepay flow too', () => {
+    const start: StartingPoint = {
+      netWorth: 30_000 - 100_000 - 60_000,
+      accounts: [cashAccount(30_000)],
+      loans: [
+        { id: 'm', name: 'M', balance: 100_000, rate: 0.03, monthlyPayment: 600, propertyId: null, variable: { diferencial: 0.01, fromYear: null } },
+        { id: 'car', name: 'Car', balance: 60_000, rate: 0.05, monthlyPayment: 900, propertyId: null },
+      ],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      euribor: 0.025,
+      incomes: [{ name: 'Job', person: 0, tax: 'trabajo', amount: 40_000, start: null, end: { kind: 'year', year: 2040 } }],
+      goals: [
+        { kind: 'loan', id: 'm', name: 'Mortgage', loanId: 'm', effect: 'payment', fee: 0.0025, prepay: { kind: 'monthly' }, end: null },
+        { kind: 'loan', id: 'car', name: 'Car', loanId: 'car', effect: 'term', fee: 0.01, prepay: { kind: 'threshold', amount: 4_000 }, end: null },
+      ],
+      savings: [{ from: { year: 2026, month: 2 }, amounts: { m: 600, car: 400 } }],
+      flows: [{ loanId: 'm', mode: 'percent', amount: 0.5, effect: 'term', until: null, fee: 0.0025 }],
+      taxPayment: 'nextYear',
+    };
+    const rows = runPlan(p, start).rows;
+    expect(rows[0].realEstate.loanPrepaid).toBeGreaterThan(0);
+    expect(rows.some((r) => r.withdrawals.cash > 0 && r.savings!.goals.car.prepaid! > 0)).toBe(true);
+    expect(rows.at(-1)!.loanBalance).toBe(0);
+    expectBalanced(rows, start);
+  });
+
+  it('adds up when a fund goal pays the down payment of a purchase in a month', () => {
+    const start: StartingPoint = {
+      netWorth: 20_000 + 30_000,
+      accounts: [cashAccount(20_000), investAccount('fund', 'fund', 10, 3_000, 20_000)],
+    };
+    const p: Plan = {
+      ...defaultPlan(2026),
+      returns: RETURNS,
+      incomes: [{ name: 'Job', person: 0, tax: 'trabajo', amount: 30_000, pagas: 14, start: null, end: null }],
+      propertyPurchases: [
+        {
+          id: 'flat',
+          name: 'Flat',
+          timing: { kind: 'year', year: 2029 },
+          month: 4,
+          price: 150_000,
+          costs: { kind: 'amount', amount: 2_000 },
+          newBuild: true,
+          habitual: true,
+          owner: 0,
+          ibi: 400,
+          ibiMonth: 9,
+          mortgage: { amount: 120_000, rate: 0.03, years: 25 },
+        },
+      ],
+      goals: [{ kind: 'account', id: 'dp', name: 'Down payment', accountId: 'fund', target: { kind: 'purchase', purchaseId: 'flat' }, end: null }],
+      savings: [{ from: { year: 2026, month: 1 }, amounts: { dp: 1_200 } }],
+      taxPayment: 'nextYear',
+    };
+    const rows = runPlan(p, start).rows;
+    const y2029 = rows.find((r) => r.year === 2029)!;
+    expect(y2029.withdrawals.fund).toBeGreaterThan(0);
+    expect(y2029.realizedGains).toBeGreaterThan(0);
+    expect(y2029.realEstate.purchaseFees).toBeGreaterThan(2_000);
+    expectBalanced(rows, start);
+  });
+
   it('lists only non-zero flows and converts to today’s euros', () => {
     const start: StartingPoint = { netWorth: 30_000, accounts: [cashAccount(30_000)] };
     const [, second] = runPlan({ ...defaultPlan(2026), returns: ZERO_RETURNS }, start).rows;

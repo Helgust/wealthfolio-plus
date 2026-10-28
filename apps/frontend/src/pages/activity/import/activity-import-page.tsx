@@ -678,7 +678,10 @@ function ImportWizardContent() {
         onBack={isMobile ? handleCancelClick : undefined}
         actions={
           <div className="flex items-center gap-2">
-            <ImportHelpPopover defaultTab={isHoldingsMode ? "holdings" : "activities"} />
+            <ImportHelpPopover
+              defaultTab={isHoldingsMode ? "holdings" : "activities"}
+              transactionImport={isTransactionImport}
+            />
             {!isMobile && (
               <Button
                 variant="ghost"
@@ -686,7 +689,7 @@ function ImportWizardContent() {
                 onClick={handleCancelClick}
                 className="hidden sm:flex"
               >
-                <Icons.X className="mr-2 h-4 w-4" />
+                <Icons.X className="me-2 h-4 w-4" />
                 {t("activity:import.toolbar.cancel")}
               </Button>
             )}

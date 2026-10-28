@@ -15,6 +15,7 @@ import type { Owner } from '../model/accounts';
 import type { Plan, PropertyPurchase, Rental } from '../model/plan';
 import type { PropertyUse } from '../model/properties';
 import { amountInYear } from './amounts';
+import { EVEN, inMonth, monthOrEven, SALE, spread } from './calendar';
 import type { MarketYear } from './market';
 import { isActive, timingYear } from './timing';
 
@@ -33,6 +34,9 @@ export interface Property {
   /** Comunidad and insurance per year in first-year prices */
   community?: number;
   insurance?: number;
+  /** The months IBI and insurance are paid in; absent — spread over the year */
+  ibiMonth?: number;
+  insuranceMonth?: number;
   /** Share of the building in the value, for the amortización of a rental; absent — none */
   constructionShare?: number;
   /** Interest and repairs of a rental not deducted yet (art. 23.1.a.1º), oldest first */
@@ -89,6 +93,8 @@ export interface RealEstateYear {
   exemptGains: number;
   purchaseCost: number;
   purchaseTax: number;
+  /** Notaría, registro, gestoría, tasación of the purchases */
+  purchaseFees: number;
   newLoans: number;
 }
 
@@ -148,19 +154,50 @@ export const euriborOf = (plan: Plan, market: MarketYear) =>
 /** Loan rates cannot be negative (art. 21.4 Ley 5/2019). */
 const variableRate = (euribor: number, diferencial: number) => Math.max(euribor + diferencial, 0);
 
-/** Twelve monthly payments; a payment below the interest pays the interest only. */
-function amortize(loan: Loan): { interest: number; principal: number } {
+/** One monthly payment; a payment below the interest pays the interest only. */
+export function amortizeMonth(loan: Loan): { interest: number; principal: number } {
+  if (loan.balance <= 1e-9) return { interest: 0, principal: 0 };
+  const interest = (loan.balance * loan.rate) / 12;
+  const principal = Math.min(Math.max(loan.monthlyPayment - interest, 0), loan.balance);
+  loan.balance -= principal;
+  return { interest, principal };
+}
+
+/** Twelve monthly payments; months — takes each payment out of its month. */
+function amortize(loan: Loan, months: number[] | null = null): { interest: number; principal: number } {
   let interest = 0;
   let principal = 0;
-  for (let m = 0; m < 12 && loan.balance > 1e-9; m++) {
-    const i = (loan.balance * loan.rate) / 12;
-    const p = Math.min(Math.max(loan.monthlyPayment - i, 0), loan.balance);
-    loan.balance -= p;
-    interest += i;
-    principal += p;
+  for (let m = 0; m < 12; m++) {
+    const a = amortizeMonth(loan);
+    interest += a.interest;
+    principal += a.principal;
+    if (months) months[m] -= a.interest + a.principal;
   }
   return { interest, principal };
 }
+
+/** What a purchase takes in its year, nominal: the price, the purchase tax, the costs and the mortgage. */
+export interface PurchaseAmounts {
+  price: number;
+  tax: number;
+  fees: number;
+  mortgage: number;
+}
+
+/** The amounts of a purchase at a price level (first-year prices → that year's). */
+export function purchaseAmounts(pp: PropertyPurchase, inmuebles: IrpfRules['inmuebles'], level: number): PurchaseAmounts {
+  const price = pp.price * level;
+  const c = pp.costs;
+  return {
+    price,
+    tax: impuestoCompraVivienda(price, { nueva: pp.newBuild, habitual: pp.habitual }, inmuebles),
+    fees: !c ? 0 : c.kind === 'percent' ? price * c.rate : c.amount * level,
+    mortgage: pp.mortgage && pp.mortgage.amount > 0 ? pp.mortgage.amount * level : 0,
+  };
+}
+
+/** The down payment: what a purchase takes beyond its mortgage. */
+export const downPayment = (a: PurchaseAmounts) => a.price + a.tax + a.fees - a.mortgage;
 
 /** Year a purchase happens, if known by now (a milestone not reached yet is not). */
 function purchaseYear(p: PropertyPurchase, plan: Plan, reached: ReadonlyMap<string, number>): number | null {
@@ -171,6 +208,9 @@ function purchaseYear(p: PropertyPurchase, plan: Plan, reached: ReadonlyMap<stri
  * One year of real estate: grows values, charges IBI and loan payments, imputes rent, carries out
  * the plan's sales and purchases of this year. Mutates properties and loans.
  * market — the year's returns; deflatorAt — price level of a calendar year in first-year prices.
+ * monthly — loans the caller pays month by month (savings goals prepay them): their rate is revised
+ * here, but they are not amortized, and a let home deducts their scheduled interest.
+ * months — the year's cash by month: what real estate brings in and takes is added to it.
  */
 export function realEstateYear(
   plan: Plan,
@@ -182,7 +222,10 @@ export function realEstateYear(
   ages: number[],
   market: MarketYear,
   deflatorAt: (year: number) => number,
+  monthly: ReadonlySet<string> = new Set(),
+  months: number[] | null = null,
 ): RealEstateYear {
+  const toMonths = (amount: number, calendar: readonly number[]) => months && spread(months, amount, calendar);
   const n = plan.people.length;
   const out: RealEstateYear = {
     growth: 0,
@@ -203,6 +246,7 @@ export function realEstateYear(
     exemptGains: 0,
     purchaseCost: 0,
     purchaseTax: 0,
+    purchaseFees: 0,
     newLoans: 0,
   };
 
@@ -215,6 +259,9 @@ export function realEstateYear(
     out.growth += g;
     out.ibi += p.ibi * level;
     out.ownershipCosts += ((p.community ?? 0) + (p.insurance ?? 0)) * level;
+    toMonths(-p.ibi * level, monthOrEven(p.ibiMonth));
+    toMonths(-(p.community ?? 0) * level, EVEN);
+    toMonths(-(p.insurance ?? 0) * level, monthOrEven(p.insuranceMonth));
     const rental = plan.rentals.find((r) => r.propertyId === p.id && isActive(r.start, r.end, year, plan, reached));
     if (rental) {
       rentals.set(p, rental);
@@ -232,7 +279,12 @@ export function realEstateYear(
   for (const l of loans) {
     const v = l.variable;
     if (v && year >= (v.fromYear ?? plan.startYear + 1)) reviseRate(l, variableRate(euribor, v.diferencial));
-    const a = amortize(l);
+    if (monthly.has(l.id)) {
+      const scheduled = amortize({ ...l });
+      if (l.propertyId) interestOf.set(l.propertyId, (interestOf.get(l.propertyId) ?? 0) + scheduled.interest);
+      continue;
+    }
+    const a = amortize(l, months);
     out.loanInterest += a.interest;
     out.loanPrincipal += a.principal;
     if (l.propertyId) interestOf.set(l.propertyId, (interestOf.get(l.propertyId) ?? 0) + a.interest);
@@ -254,6 +306,7 @@ export function realEstateYear(
     p.rentalPending = res.pendientes;
     out.rent += rent;
     out.rentalRepairs += repairs;
+    toMonths(rent - repairs, EVEN);
     shares(p.owner, n).forEach((s, i) => (out.rentalIncome[i] += res.rendimiento_neto_reducido * s));
   }
 
@@ -279,6 +332,7 @@ export function realEstateYear(
     out.saleValue += p.value;
     out.saleProceeds += proceeds;
     out.loanRepaidAtSale += owed;
+    toMonths(proceeds - owed, SALE);
     const gain = proceeds - p.acquisitionValue;
     // A home let before the sale is still the vivienda habitual if it was one until any day of the
     // two years before the sale (art. 41 bis.3 RIRPF): it stopped being one at the end of the year
@@ -295,13 +349,16 @@ export function realEstateYear(
     });
   }
 
-  // Purchases of this year: price plus purchase tax, less the mortgage.
+  // Purchases of this year: price plus purchase tax and costs, less the mortgage.
   plan.propertyPurchases.forEach((pp) => {
     if (purchaseYear(pp, plan, reached) !== year) return;
-    const price = pp.price * deflatorAt(year);
-    const tax = impuestoCompraVivienda(price, { nueva: pp.newBuild, habitual: pp.habitual }, rules.inmuebles);
+    const { price, tax, fees } = purchaseAmounts(pp, rules.inmuebles, deflatorAt(year));
     out.purchaseCost += price;
     out.purchaseTax += tax;
+    out.purchaseFees += fees;
+    // Without a month a purchase is at the end of the year: its mortgage is paid from the next one.
+    const month = inMonth(pp.month ?? 12);
+    toMonths(-(price + tax + fees), month);
     const id = `purchase:${pp.id}`;
     properties.push({
       id,
@@ -312,20 +369,23 @@ export function realEstateYear(
       valorCatastral: null,
       catastroRevisado: false,
       ibi: pp.ibi,
-      acquisitionValue: price + tax,
+      acquisitionValue: price + tax + fees,
       ...(pp.community ? { community: pp.community } : {}),
       ...(pp.insurance ? { insurance: pp.insurance } : {}),
+      ...(pp.ibiMonth ? { ibiMonth: pp.ibiMonth } : {}),
+      ...(pp.insuranceMonth ? { insuranceMonth: pp.insuranceMonth } : {}),
       ...(pp.constructionShare ? { constructionShare: pp.constructionShare } : {}),
     });
     const m = pp.mortgage;
     if (m && m.amount > 0) {
       const amount = m.amount * deflatorAt(year);
       out.newLoans += amount;
+      toMonths(amount, month);
       // Payments start next year: a variable one at this year's Euríbor, a mixed one at the fixed
       // rate for fixedYears. Revisions follow once a year.
       const v = m.variable;
       const rate = v && v.fixedYears === 0 ? variableRate(euribor, v.diferencial) : m.rate;
-      loans.push({
+      const loan: Loan = {
         id: `mortgage:${pp.id}`,
         name: `Mortgage · ${pp.name}`,
         balance: amount,
@@ -333,7 +393,15 @@ export function realEstateYear(
         monthlyPayment: annuityPayment(amount, rate, m.years),
         propertyId: id,
         ...(v ? { variable: { diferencial: v.diferencial, fromYear: year + 1 + v.fixedYears } } : {}),
-      });
+      };
+      loans.push(loan);
+      // Bought in a month: the payments start in the next one.
+      for (let k = pp.month ?? 12; k < 12; k++) {
+        const a = amortizeMonth(loan);
+        out.loanInterest += a.interest;
+        out.loanPrincipal += a.principal;
+        if (months) months[k] -= a.interest + a.principal;
+      }
     }
   });
   return out;
@@ -347,6 +415,7 @@ export function realEstateCash(r: RealEstateYear): number {
     r.newLoans -
     r.purchaseCost -
     r.purchaseTax -
+    r.purchaseFees -
     r.ibi -
     r.ownershipCosts +
     r.rent -

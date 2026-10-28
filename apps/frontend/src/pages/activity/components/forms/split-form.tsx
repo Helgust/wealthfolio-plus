@@ -20,6 +20,8 @@ import {
   SymbolSearch,
   type AccountSelectOption,
 } from "./fields";
+import { assetMetadataSchema } from "./schemas";
+import { Spinner } from "@wealthfolio/ui";
 
 // Translated message helper (see buy-form for rationale).
 type MsgFn = TFunction | undefined;
@@ -70,6 +72,7 @@ export const createSplitFormSchema = (t?: TFunction) =>
     fxRate: z.null().optional(),
     symbolQuoteCcy: z.string().nullable().optional(),
     symbolInstrumentType: z.string().nullable().optional(),
+    assetMetadata: assetMetadataSchema,
   });
 
 // Zod schema for SplitForm validation (English messages; used by tests).
@@ -157,7 +160,10 @@ export function SplitForm({
             quoteCcyName="symbolQuoteCcy"
             instrumentTypeName="symbolInstrumentType"
             existingAssetIdName="existingAssetId"
+            assetMetadataName="assetMetadata"
           />
+          <input type="hidden" {...form.register("assetMetadata.providerId")} />
+          <input type="hidden" {...form.register("assetMetadata.providerSymbol")} />
           <input type="hidden" {...form.register("symbolQuoteCcy")} />
           <input type="hidden" {...form.register("symbolInstrumentType")} />
           <input type="hidden" {...form.register("existingAssetId")} />
@@ -200,11 +206,11 @@ export function SplitForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {isEditing ? t("activity:form.button_update") : t("activity:form.button_add_split")}
           </Button>
