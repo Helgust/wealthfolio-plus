@@ -986,6 +986,14 @@ pub(crate) async fn build_profile_state(
     let ai_chat_repository = Arc::new(AiChatRepository::new(pool.clone(), writer.clone()));
 
     // Create the AI environment and chat service using the new wealthfolio-ai crate
+    // Before the AI environment: the wealthfolio-plus budget tools read addon storage.
+    let addon_storage_repository =
+        Arc::new(AddonStorageRepository::new(pool.clone(), writer.clone()));
+    let addon_service: Arc<dyn AddonServiceTrait + Send + Sync> = Arc::new(AddonService::new(
+        &config.addons_root,
+        rating_instance_id,
+        addon_storage_repository,
+    ));
     let ai_environment = Arc::new(ServerAiEnvironment::new(
         base_currency.clone(),
         account_service.clone(),
@@ -1009,7 +1017,9 @@ pub(crate) async fn build_profile_state(
         cash_activity_service.clone(),
         activity_taxonomy_assignment_service.clone(),
         categorization_rules_service.clone(),
-    ));
+        )
+        .with_addon_service(addon_service.clone()),
+    );
     let agent_environment: Arc<dyn wealthfolio_agent_tools::AgentEnvironment> =
         ai_environment.clone();
     let ai_chat_service = Arc::new(ChatService::new(ai_environment, ChatConfig::default()));
@@ -1046,13 +1056,6 @@ pub(crate) async fn build_profile_state(
     }
 
 
-    let addon_storage_repository =
-        Arc::new(AddonStorageRepository::new(pool.clone(), writer.clone()));
-    let addon_service: Arc<dyn AddonServiceTrait + Send + Sync> = Arc::new(AddonService::new(
-        &config.addons_root,
-        rating_instance_id,
-        addon_storage_repository,
-    ));
 
     let auth = crate::auth::AuthState::from_config(config).await?;
     let auth_manager = auth.auth;

@@ -42,6 +42,7 @@ impl AgentToolCatalog {
         tools.extend(crate::tools::draft_suggest_tools());
         tools.extend(crate::tools::commit_tools());
         tools.extend(crate::tools::import_tools());
+        tools.extend(crate::tools::plus_tools());
         Self::new(tools)
     }
 

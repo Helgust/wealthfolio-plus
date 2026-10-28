@@ -11,6 +11,7 @@ use std::sync::Arc;
 use wealthfolio_core::{
     accounts::AccountServiceTrait,
     activities::ActivityServiceTrait,
+    addons::AddonServiceTrait,
     assets::AssetServiceTrait,
     goals::GoalServiceTrait,
     health::HealthServiceTrait,
@@ -86,4 +87,10 @@ pub trait AgentEnvironment: Send + Sync {
 
     /// Get the categorization-rules service for the rules-first pass in category proposals.
     fn categorization_rules_service(&self) -> Arc<dyn CategorizationRulesServiceTrait>;
+
+    /// Get the addon service for addon storage reads (wealthfolio-plus budget tools).
+    /// `None` where a host does not wire it; the tools then report it unavailable.
+    fn addon_service(&self) -> Option<Arc<dyn AddonServiceTrait>> {
+        None
+    }
 }

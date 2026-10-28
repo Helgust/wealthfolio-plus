@@ -10,6 +10,7 @@ pub mod activity_import;
 pub mod allocation;
 pub mod asset_classification;
 pub mod asset_taxonomies;
+pub mod budgets;
 pub mod cash_balances;
 pub mod categorization_context;
 pub mod commit_activity;
@@ -106,6 +107,9 @@ pub use commit_categorization_rule::{
     CommitCategorizationRule, CommitCategorizationRuleArgs, CommitCategorizationRuleOutput,
 };
 
+// wealthfolio-plus: budgets of the Planificador ES addon.
+pub use budgets::{GetBudgets, GetBudgetsArgs};
+
 // MCP-only CSV import tools (validate + dedup-safe import pipeline).
 pub use activity_import::{
     ActivityImportArgs, ActivityImportRow, CommitActivityImport, CommitActivityImportOutput,
@@ -174,6 +178,13 @@ pub fn import_tools() -> Vec<Arc<dyn AgentTool>> {
         Arc::new(PrepareActivityImport),
         Arc::new(CommitActivityImport),
     ]
+}
+
+/// wealthfolio-plus tools over the Planificador ES addon's storage. MCP-only,
+/// kept apart from the upstream lists so merges of Wealthfolio releases do not
+/// touch them.
+pub fn plus_tools() -> Vec<Arc<dyn AgentTool>> {
+    vec![Arc::new(GetBudgets)]
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 
 use wealthfolio_ai::{AgentEnvironment, AiEnvironment, ChatRepositoryTrait};
 use wealthfolio_core::{
-    accounts::AccountServiceTrait, activities::ActivityServiceTrait,
+    accounts::AccountServiceTrait, activities::ActivityServiceTrait, addons::AddonServiceTrait,
     allocation::AllocationServiceTrait, assets::AssetServiceTrait, goals::GoalServiceTrait,
     health::HealthServiceTrait, holdings::HoldingsServiceTrait, income::IncomeServiceTrait,
     limits::ContributionLimitServiceTrait, performance::PerformanceServiceTrait,
@@ -48,6 +48,8 @@ pub struct ServerAiEnvironment {
     cash_activity_service: Arc<CashActivityService>,
     activity_taxonomy_assignment_service: Arc<ActivityTaxonomyAssignmentService>,
     categorization_rules_service: Arc<CategorizationRulesService>,
+    /// wealthfolio-plus: addon storage for the budget tools.
+    addon_service: Option<Arc<dyn AddonServiceTrait>>,
 }
 
 impl ServerAiEnvironment {
@@ -100,7 +102,14 @@ impl ServerAiEnvironment {
             cash_activity_service,
             activity_taxonomy_assignment_service,
             categorization_rules_service,
+            addon_service: None,
         }
+    }
+
+    /// wealthfolio-plus: gives the agent tools the addon storage.
+    pub fn with_addon_service(mut self, addon_service: Arc<dyn AddonServiceTrait>) -> Self {
+        self.addon_service = Some(addon_service);
+        self
     }
 }
 
@@ -179,6 +188,10 @@ impl AgentEnvironment for ServerAiEnvironment {
 
     fn categorization_rules_service(&self) -> Arc<dyn CategorizationRulesServiceTrait> {
         self.categorization_rules_service.clone()
+    }
+
+    fn addon_service(&self) -> Option<Arc<dyn AddonServiceTrait>> {
+        self.addon_service.clone()
     }
 }
 

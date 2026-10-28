@@ -660,31 +660,44 @@ async fn build_context(
         Arc::new(HealthDismissalRepository::new(pool.clone(), writer.clone()));
     let health_service = Arc::new(HealthService::new(health_dismissal_repository));
 
-    // Create AI environment and chat service
-    let ai_environment = Arc::new(TauriAiEnvironment::new(
-        base_currency.clone(),
-        account_service.clone(),
-        activity_service.clone(),
-        holdings_service.clone(),
-        valuation_service.clone(),
-        goal_service.clone(),
-        settings_service.clone(),
-        secret_store.clone(),
-        ai_chat_repository,
-        quote_service.clone(),
-        asset_service.clone(),
-        allocation_service.clone(),
-        performance_service.clone(),
-        income_service.clone(),
-        health_service.clone(),
-        taxonomy_service.clone(),
-        portfolio_service.clone(),
-        net_worth_service.clone(),
-        limits_service.clone(),
-        cash_activity_service.clone(),
-        activity_taxonomy_assignment_service.clone(),
-        categorization_rules_service.clone(),
+    // Durable per-addon key-value storage repository (before the AI environment: the
+    // wealthfolio-plus budget tools read it)
+    let addon_storage_repository: Arc<dyn wealthfolio_core::addons::AddonStorageRepositoryTrait> =
+        Arc::new(AddonStorageRepository::new(pool.clone(), writer.clone()));
+    let addon_service = Arc::new(AddonService::new(
+        app_data_dir,
+        rating_instance_id.as_str(),
+        addon_storage_repository.clone(),
     ));
+
+    // Create AI environment and chat service
+    let ai_environment = Arc::new(
+        TauriAiEnvironment::new(
+            base_currency.clone(),
+            account_service.clone(),
+            activity_service.clone(),
+            holdings_service.clone(),
+            valuation_service.clone(),
+            goal_service.clone(),
+            settings_service.clone(),
+            secret_store.clone(),
+            ai_chat_repository,
+            quote_service.clone(),
+            asset_service.clone(),
+            allocation_service.clone(),
+            performance_service.clone(),
+            income_service.clone(),
+            health_service.clone(),
+            taxonomy_service.clone(),
+            portfolio_service.clone(),
+            net_worth_service.clone(),
+            limits_service.clone(),
+            cash_activity_service.clone(),
+            activity_taxonomy_assignment_service.clone(),
+            categorization_rules_service.clone(),
+        )
+        .with_addon_service(addon_service.clone()),
+    );
     let agent_environment: Arc<dyn wealthfolio_agent_tools::AgentEnvironment> =
         ai_environment.clone();
     let ai_chat_service = Arc::new(ChatService::new(ai_environment, ChatConfig::default()));
@@ -694,15 +707,6 @@ async fn build_context(
 
     // Personal Access Token repository (per-client scoped MCP auth)
     let pat_repository = Arc::new(PatRepository::new(pool.clone(), writer.clone()));
-
-    // Durable per-addon key-value storage repository
-    let addon_storage_repository: Arc<dyn wealthfolio_core::addons::AddonStorageRepositoryTrait> =
-        Arc::new(AddonStorageRepository::new(pool.clone(), writer.clone()));
-    let addon_service = Arc::new(AddonService::new(
-        app_data_dir,
-        rating_instance_id.as_str(),
-        addon_storage_repository.clone(),
-    ));
 
     // Device enroll service for E2EE sync
     let cloud_api_url = crate::services::cloud_api_base_url().unwrap_or_default();
