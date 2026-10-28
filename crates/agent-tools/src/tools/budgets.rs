@@ -300,7 +300,10 @@ fn budget_schema() -> Value {
                         },
                         {
                             "type": "object",
-                            "properties": { "kind": { "const": "fill" }, "envelopeId": id, "target": money },
+                            "properties": {
+                                "kind": { "const": "fill" }, "envelopeId": id, "target": money,
+                                "goalId": { "type": "string", "minLength": 1, "description": "A Wealthfolio goal (get_goals) whose target amount replaces target" }
+                            },
                             "required": ["kind", "envelopeId", "target"],
                             "additionalProperties": false
                         },
