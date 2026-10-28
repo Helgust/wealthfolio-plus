@@ -1,5 +1,6 @@
 // Budget page: a month-by-month short-term plan — key dates, plan vs Wealthfolio for this month,
-// envelope and loan balances, the table by month.
+// envelope and loan balances, the table by month; a draft proposed through MCP to preview, accept
+// or reject.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import {
@@ -18,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@wealthfolio/ui';
-import { Pencil } from 'lucide-react';
+import { Check, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { BudgetChart } from '../components/budget-chart';
 import { BudgetEditor } from '../components/budget-editor';
@@ -32,17 +33,25 @@ import { newBudget, type Budget } from '../model/budget';
 import {
   activeBudget,
   addBudget,
+  applyDraft,
   BUDGETS_KEY,
   deleteBudget,
+  discardDraft,
+  DRAFT_KEY,
   loadBudgets,
+  loadDraft,
   MAX_BUDGETS,
   saveBudgets,
   setBudget,
   type BudgetBook,
+  type BudgetDraft,
   type LoadedBudgets,
 } from '../model/budget-storage';
 
 const QUERY_KEY = ['planificador-es', BUDGETS_KEY];
+const DRAFT_QUERY_KEY = ['planificador-es', DRAFT_KEY];
+/** The MCP server writes drafts while the page is open: check for one this often. */
+const DRAFT_POLL_MS = 10_000;
 
 const thisMonth = () => {
   const d = new Date();
@@ -63,23 +72,42 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
   const queryClient = useQueryClient();
   const portfolio = useQuery({ queryKey: PORTFOLIO_KEY, queryFn: () => loadPortfolio(ctx) });
   const loaded = useQuery({ queryKey: QUERY_KEY, queryFn: () => loadBudgets(ctx.api.storage) });
+  const draftQuery = useQuery({
+    queryKey: DRAFT_QUERY_KEY,
+    queryFn: () => loadDraft(ctx.api.storage),
+    refetchInterval: DRAFT_POLL_MS,
+  });
   const [editing, setEditing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const book = loaded.data?.book;
   const active = book && activeBudget(book);
-  const budget = active?.budget;
+  const draft = draftQuery.data ?? null;
+  const preview = previewing && draft?.budget ? draft.budget : null;
+  // What the page shows: the draft while previewing it, otherwise the active budget.
+  const budget = preview ?? active?.budget;
   const rows = useMemo(() => (budget ? runBudget(budget) : null), [budget]);
 
-  async function change(op: (b: BudgetBook) => BudgetBook) {
+  /** true — saved */
+  async function change(op: (b: BudgetBook) => BudgetBook): Promise<boolean> {
     setActionError(null);
     try {
       const next = await saveBudgets(ctx.api.storage, op(book!));
       // A saved book is readable: the unreadable-record warning goes.
       queryClient.setQueryData<LoadedBudgets>(QUERY_KEY, { book: next });
+      return true;
     } catch (e) {
       setActionError(String(e));
+      return false;
     }
+  }
+
+  async function settleDraft(accept: boolean) {
+    if (accept && !(await change((b) => applyDraft(b, draft!)))) return;
+    await discardDraft(ctx.api.storage);
+    queryClient.setQueryData<BudgetDraft | null>(DRAFT_QUERY_KEY, null);
+    setPreviewing(false);
   }
 
   const error = portfolio.error ?? loaded.error;
@@ -100,6 +128,7 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
         actions={
           <div className="flex items-center gap-2">
             <PlanSwitcher
+              disabled={preview !== null}
               items={book.entries.map((e) => ({ id: e.id, name: e.budget.name }))}
               activeId={book.activeId}
               max={MAX_BUDGETS}
@@ -113,16 +142,28 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
                   }),
                 )
               }
-              onDuplicate={() => change((b) => addBudget(b, { ...budget, name: `${budget.name.slice(0, 53)} (copy)` }))}
+              onDuplicate={() =>
+                change((b) => addBudget(b, { ...active.budget, name: `${active.budget.name.slice(0, 53)} (copy)` }))
+              }
               onDelete={() => change((b) => deleteBudget(b, active.id))}
             />
-            <Button size="sm" onClick={() => setEditing(true)}>
+            <Button size="sm" disabled={preview !== null} onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" /> Edit budget
             </Button>
           </div>
         }
       />
       <PageContent className="space-y-4">
+        {draft && (
+          <DraftCard
+            draft={draft}
+            target={book.entries.find((e) => e.id === draft.target)?.budget.name ?? null}
+            previewing={preview !== null}
+            onPreview={() => setPreviewing((p) => !p)}
+            onAccept={() => settleDraft(true)}
+            onReject={() => settleDraft(false)}
+          />
+        )}
         {actionError && (
           <Alert variant="destructive">
             <AlertDescription>{actionError}</AlertDescription>
@@ -190,7 +231,7 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
         </p>
       </PageContent>
       <BudgetEditor
-        budget={budget}
+        budget={active.budget}
         open={editing}
         portfolio={portfolio.data}
         currency={currency}
@@ -201,6 +242,61 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
         }}
       />
     </Page>
+  );
+}
+
+interface DraftCardProps {
+  draft: BudgetDraft;
+  /** Name of the budget it replaces; null — a new budget (or its budget was deleted since) */
+  target: string | null;
+  previewing: boolean;
+  onPreview: () => void;
+  onAccept: () => void;
+  onReject: () => void;
+}
+
+/** A budget proposed through MCP: it is saved only when accepted here. */
+function DraftCard({ draft, target, previewing, onPreview, onAccept, onReject }: DraftCardProps) {
+  const created = draft.createdAt ? new Date(draft.createdAt).toLocaleString('en-GB') : null;
+  return (
+    <Alert variant={draft.budget ? 'default' : 'destructive'}>
+      <AlertDescription className="space-y-2">
+        <div className="font-medium">
+          {target ? `Proposed changes to “${target}”` : 'Proposed new budget'}
+          {draft.budget && ` — “${draft.budget.name}”`}
+          {created && <span className="text-muted-foreground font-normal"> · {created}</span>}
+        </div>
+        {draft.note && <p>{draft.note}</p>}
+        {draft.budget ? (
+          previewing && <p>The page shows the draft. Accept it to save, or reject it to go back.</p>
+        ) : (
+          <div>
+            <p>The draft does not pass validation and cannot be accepted:</p>
+            <ul className="list-disc pl-5">
+              {draft.issues.map((i) => (
+                <li key={i}>{i}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex gap-2">
+          {draft.budget && (
+            <>
+              <Button size="sm" variant="outline" onClick={onPreview}>
+                {previewing ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {previewing ? 'Hide preview' : 'Preview'}
+              </Button>
+              <Button size="sm" onClick={onAccept}>
+                <Check className="h-4 w-4" /> Accept
+              </Button>
+            </>
+          )}
+          <Button size="sm" variant="outline" onClick={onReject}>
+            <X className="h-4 w-4" /> Reject
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
   );
 }
 

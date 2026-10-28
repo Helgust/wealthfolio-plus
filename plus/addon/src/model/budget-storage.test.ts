@@ -1,7 +1,16 @@
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { describe, expect, it } from 'vitest';
 import { newBudget } from './budget';
-import { activeBudget, addBudget, deleteBudget, loadBudgets, saveBudgets, setBudget } from './budget-storage';
+import {
+  activeBudget,
+  addBudget,
+  applyDraft,
+  deleteBudget,
+  loadBudgets,
+  loadDraft,
+  saveBudgets,
+  setBudget,
+} from './budget-storage';
 
 type Storage = AddonContext['api']['storage'];
 
@@ -86,5 +95,48 @@ describe('budget storage', () => {
       saveBudgets(storage, setBudget(book, book.activeId, { ...named('Bad'), months: 0 })),
     ).rejects.toThrow();
     expect(data.size).toBe(0);
+  });
+
+  it('reads a valid draft and applies it to its target', async () => {
+    const { storage } = memoryStorage();
+    const { book } = await loadBudgets(storage);
+    const two = addBudget(book, named('Second'));
+    const record = { target: book.activeId, note: 'n', createdAt: 't', budget: named('Changed') };
+    await storage.set('budgets.v1.draft', JSON.stringify(record));
+    const draft = (await loadDraft(storage))!;
+    expect(draft.issues).toEqual([]);
+    const next = applyDraft(two, draft);
+    expect(next.activeId).toBe(book.activeId);
+    expect(activeBudget(next).budget.name).toBe('Changed');
+    expect(next.entries).toHaveLength(2);
+  });
+
+  it('adds a draft that is new or whose target was deleted', async () => {
+    const { storage } = memoryStorage();
+    const { book } = await loadBudgets(storage);
+    for (const target of [null, 'gone']) {
+      await storage.set('budgets.v1.draft', JSON.stringify({ target, note: '', createdAt: 't', budget: named('New') }));
+      const next = applyDraft(book, (await loadDraft(storage))!);
+      expect(next.entries).toHaveLength(2);
+      expect(activeBudget(next).budget.name).toBe('New');
+    }
+  });
+
+  it('reports why a draft fails the schema and refuses to apply it', async () => {
+    const { storage } = memoryStorage();
+    const { book } = await loadBudgets(storage);
+    const budget = { ...named('Bad'), steps: [{ kind: 'rest', envelopeId: 'nope', whileLoan: null }] };
+    await storage.set('budgets.v1.draft', JSON.stringify({ target: null, note: '', createdAt: 't', budget }));
+    const draft = (await loadDraft(storage))!;
+    expect(draft.budget).toBeNull();
+    expect(draft.issues).toEqual(['steps.0.envelopeId: Unknown envelope']);
+    expect(() => applyDraft(book, draft)).toThrow();
+  });
+
+  it('has no draft by default and reads a broken one as issues', async () => {
+    const { storage } = memoryStorage();
+    expect(await loadDraft(storage)).toBeNull();
+    await storage.set('budgets.v1.draft', '{');
+    expect((await loadDraft(storage))!.issues[0]).toContain('Invalid JSON');
   });
 });

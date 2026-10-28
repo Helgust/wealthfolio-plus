@@ -29,19 +29,20 @@ interface Props {
   max: number;
   /** "plan" or "budget" */
   noun: string;
+  disabled?: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export function PlanSwitcher({ items, activeId, max, noun, onSelect, onNew, onDuplicate, onDelete }: Props) {
+export function PlanSwitcher({ items, activeId, max, noun, disabled, onSelect, onNew, onDuplicate, onDelete }: Props) {
   const [confirming, setConfirming] = useState(false);
   const full = items.length >= max;
   const Noun = noun[0].toUpperCase() + noun.slice(1);
   return (
     <div className="flex items-center gap-2">
-      <Select value={activeId} onValueChange={onSelect}>
+      <Select value={activeId} onValueChange={onSelect} disabled={disabled}>
         <SelectTrigger aria-label={Noun} style={{ width: 200 }}>
           <SelectValue />
         </SelectTrigger>
@@ -55,7 +56,7 @@ export function PlanSwitcher({ items, activeId, max, noun, onSelect, onNew, onDu
       </Select>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label={`${Noun} actions`}>
+          <Button variant="outline" size="icon" aria-label={`${Noun} actions`} disabled={disabled}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>

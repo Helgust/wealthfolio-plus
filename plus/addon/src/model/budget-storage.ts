@@ -5,6 +5,8 @@
 // budgets.v1.forecast — the month-by-month run of every budget for the MCP server, which cannot run
 // the TypeScript engine: { budgets: <the budgets.v1 it was computed from>, rows: { <id>: months } }.
 // The server reports it stale when budgets differs from budgets.v1.
+// budgets.v1.draft — a budget proposed through MCP: { target: <budget id> | null (new), note,
+// createdAt, budget }. It reaches budgets.v1 only when the user accepts it here, after this schema.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { z } from 'zod';
 import { runBudget } from '../engine/budget';
@@ -15,6 +17,7 @@ type Storage = AddonContext['api']['storage'];
 export const BUDGETS_KEY = 'budgets.v1';
 const UNREADABLE_KEY = 'budgets.v1.unreadable';
 export const FORECAST_KEY = 'budgets.v1.forecast';
+export const DRAFT_KEY = 'budgets.v1.draft';
 export const MAX_BUDGETS = 10;
 
 const BookSchema = z
@@ -106,3 +109,57 @@ export function deleteBudget(book: BudgetBook, id: string): BudgetBook {
   const entries = book.entries.filter((e) => e.id !== id);
   return { entries, activeId: book.activeId === id ? entries[0].id : book.activeId };
 }
+
+const DraftRecordSchema = z.object({
+  target: z.string().nullable(),
+  note: z.string(),
+  createdAt: z.string(),
+  budget: z.unknown(),
+});
+
+export interface BudgetDraft {
+  /** The budget it replaces; null — a new budget */
+  target: string | null;
+  note: string;
+  createdAt: string;
+  /** null — the draft fails the schema, see issues */
+  budget: Budget | null;
+  issues: string[];
+}
+
+const issueText = (issues: z.core.$ZodIssue[]) => issues.map((i) => `${i.path.join('.') || 'budget'}: ${i.message}`);
+
+export async function loadDraft(storage: Storage): Promise<BudgetDraft | null> {
+  const json = await storage.get(DRAFT_KEY);
+  if (json === null) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch (e) {
+    return { target: null, note: '', createdAt: '', budget: null, issues: [`Invalid JSON: ${String(e)}`] };
+  }
+  const record = DraftRecordSchema.safeParse(raw);
+  if (!record.success) {
+    return { target: null, note: '', createdAt: '', budget: null, issues: issueText(record.error.issues) };
+  }
+  const budget = BudgetSchema.safeParse(record.data.budget);
+  return {
+    ...record.data,
+    budget: budget.success ? budget.data : null,
+    issues: budget.success ? [] : issueText(budget.error.issues),
+  };
+}
+
+/**
+ * The book with the draft applied and made active: it replaces its target, or is added when it is
+ * new or its target was deleted since.
+ */
+export function applyDraft(book: BudgetBook, draft: BudgetDraft): BudgetBook {
+  if (!draft.budget) throw new Error('The draft does not pass validation');
+  if (draft.target !== null && book.entries.some((e) => e.id === draft.target)) {
+    return { ...setBudget(book, draft.target, draft.budget), activeId: draft.target };
+  }
+  return addBudget(book, draft.budget);
+}
+
+export const discardDraft = (storage: Storage) => storage.delete(DRAFT_KEY);
