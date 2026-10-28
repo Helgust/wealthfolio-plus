@@ -50,6 +50,35 @@ describe('budget storage', () => {
     expect(data.get('budgets.v1.unreadable')).toBe(bad);
   });
 
+  it('saves the forecast with the budgets it was computed from', async () => {
+    const { data, storage } = memoryStorage();
+    const { book } = await loadBudgets(storage);
+    const budget = {
+      ...named('Base'),
+      months: 2,
+      incomes: [{ name: 'Salary', amount: 1000.004, from: null, to: null }],
+      envelopes: [{ id: 'safety', name: 'Safety', balance: 0, accountId: null }],
+      steps: [{ kind: 'rest' as const, envelopeId: 'safety', whileLoan: null }],
+    };
+    await saveBudgets(storage, setBudget(book, book.activeId, budget));
+    const forecast = JSON.parse(data.get('budgets.v1.forecast')!);
+    expect(forecast.budgets).toEqual(JSON.parse(data.get('budgets.v1')!));
+    const rows = forecast.rows[book.activeId];
+    expect(rows).toHaveLength(2);
+    expect(rows[1].balances.safety).toBe(2000.01);
+    // The budget copy is not rounded: the server compares it with budgets.v1.
+    expect(forecast.budgets.entries[0].budget.incomes[0].amount).toBe(1000.004);
+  });
+
+  it('adds the forecast to budgets saved before it existed', async () => {
+    const { data, storage } = memoryStorage();
+    const { book } = await loadBudgets(storage);
+    await saveBudgets(storage, book);
+    data.delete('budgets.v1.forecast');
+    await loadBudgets(storage);
+    expect(data.has('budgets.v1.forecast')).toBe(true);
+  });
+
   it('refuses to save a budget that fails the schema', async () => {
     const { data, storage } = memoryStorage();
     const { book } = await loadBudgets(storage);

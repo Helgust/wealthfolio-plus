@@ -2,14 +2,19 @@
 // a few kilobytes; the value limit is 250,000 characters). One key keeps the MCP server's read
 // simple. A record that fails validation is copied to budgets.v1.unreadable before anything is
 // written over it, so a bad write (by hand or by an older addon) loses nothing.
+// budgets.v1.forecast — the month-by-month run of every budget for the MCP server, which cannot run
+// the TypeScript engine: { budgets: <the budgets.v1 it was computed from>, rows: { <id>: months } }.
+// The server reports it stale when budgets differs from budgets.v1.
 import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { z } from 'zod';
+import { runBudget } from '../engine/budget';
 import { BudgetSchema, newBudget, type Budget } from './budget';
 
 type Storage = AddonContext['api']['storage'];
 
 export const BUDGETS_KEY = 'budgets.v1';
 const UNREADABLE_KEY = 'budgets.v1.unreadable';
+export const FORECAST_KEY = 'budgets.v1.forecast';
 export const MAX_BUDGETS = 10;
 
 const BookSchema = z
@@ -47,7 +52,11 @@ export async function loadBudgets(storage: Storage): Promise<LoadedBudgets> {
   let error: string;
   try {
     const parsed = BookSchema.safeParse(JSON.parse(json));
-    if (parsed.success) return { book: parsed.data };
+    if (parsed.success) {
+      // Budgets saved before the forecast existed get one.
+      if ((await storage.get(FORECAST_KEY)) === null) await saveForecast(storage, json, parsed.data);
+      return { book: parsed.data };
+    }
     error = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
   } catch (e) {
     error = `Invalid JSON: ${String(e)}`;
@@ -58,8 +67,26 @@ export async function loadBudgets(storage: Storage): Promise<LoadedBudgets> {
 
 export async function saveBudgets(storage: Storage, book: BudgetBook): Promise<BudgetBook> {
   const parsed = BookSchema.parse(book);
-  await storage.set(BUDGETS_KEY, JSON.stringify(parsed));
+  const json = JSON.stringify(parsed);
+  await storage.set(BUDGETS_KEY, json);
+  await saveForecast(storage, json, parsed);
   return parsed;
+}
+
+/** Amounts in cents: the forecast is output. */
+const cents = (_: string, v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v);
+
+/**
+ * The forecast is a cache: if it does not fit the value limit the budgets stay saved and the MCP
+ * server sees the old forecast as stale.
+ */
+async function saveForecast(storage: Storage, budgetsJson: string, book: BudgetBook): Promise<void> {
+  const rows = Object.fromEntries(book.entries.map((e) => [e.id, runBudget(e.budget)]));
+  try {
+    await storage.set(FORECAST_KEY, `{"budgets":${budgetsJson},"rows":${JSON.stringify(rows, cents)}}`);
+  } catch {
+    // Kept stale on purpose, see above.
+  }
 }
 
 export const setBudget = (book: BudgetBook, id: string, budget: Budget): BudgetBook => ({
