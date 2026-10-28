@@ -18,6 +18,10 @@
         "path": "compare"
       },
       {
+        "id": "planificador-es-budget",
+        "path": "budget"
+      },
+      {
         "id": "planificador-es-checks",
         "path": "checks"
       }
@@ -37,6 +41,13 @@
           "label": "Compare plans",
           "icon": "scales",
           "order": 101
+        },
+        {
+          "id": "planificador-es-budget",
+          "route": "planificador-es-budget",
+          "label": "Budget",
+          "icon": "wallet",
+          "order": 102
         }
       ]
     }

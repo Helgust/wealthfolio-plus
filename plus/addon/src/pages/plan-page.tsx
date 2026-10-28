@@ -43,6 +43,7 @@ import {
   activeEntry,
   addPlan,
   deletePlan,
+  MAX_PLANS,
   savePlan,
   selectPlan,
   type PlanBook,
@@ -123,7 +124,10 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
         actions={
           <div className="flex items-center gap-2">
             <PlanSwitcher
-              book={book}
+              items={book.entries.map((e) => ({ id: e.id, name: e.plan.name }))}
+              activeId={book.activeId}
+              max={MAX_PLANS}
+              noun="plan"
               onSelect={(id) => run((b) => selectPlan(ctx.api.storage, b, id))}
               onNew={() =>
                 run((b) =>

@@ -3,6 +3,7 @@ import type { AddonContext, AddonEnableFunction } from '@wealthfolio/addon-sdk';
 import { registerTranslations } from '@wealthfolio/addon-sdk';
 import { PageScrollContainer } from '@wealthfolio/ui';
 import type { ReactNode } from 'react';
+import { BudgetPage } from './pages/budget-page';
 import { ComparePage } from './pages/compare-page';
 import { Phase0Page } from './pages/phase0-page';
 import { CHECKS_ROUTE, PlanPage } from './pages/plan-page';
@@ -32,6 +33,12 @@ const CompareRoute = () => (
   </WithQuery>
 );
 
+const BudgetRoute = () => (
+  <WithQuery>
+    <BudgetPage ctx={addonCtx!} />
+  </WithQuery>
+);
+
 const ChecksRoute = () => (
   <WithQuery>
     <Phase0Page ctx={addonCtx!} />
@@ -52,6 +59,7 @@ const enable: AddonEnableFunction = (ctx) => {
   // `id` must match `contributes.routes[].id` in manifest.json.
   ctx.router.add({ id: 'planificador-es', path: '/addons/planificador-es', component: PlanRoute });
   ctx.router.add({ id: 'planificador-es-compare', path: '/addons/planificador-es/compare', component: CompareRoute });
+  ctx.router.add({ id: 'planificador-es-budget', path: '/addons/planificador-es/budget', component: BudgetRoute });
   ctx.router.add({ id: 'planificador-es-checks', path: CHECKS_ROUTE, component: ChecksRoute });
 
   ctx.onDisable(() => {
