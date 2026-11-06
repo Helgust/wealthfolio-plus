@@ -184,29 +184,19 @@ fn date_for_plan_age(plan: &RetirementPlan, age: u32, as_of: NaiveDate) -> Optio
         .map(|date| date.format("%Y-%m-%d").to_string())
 }
 
-/// Amount saved outside funding accounts (`startingAmount` in save-up plan settings).
-fn save_up_starting_amount(plan: Option<&GoalPlan>) -> f64 {
-    plan.filter(|p| p.plan_kind == "save_up")
-        .and_then(|p| serde_json::from_str::<serde_json::Value>(&p.settings_json).ok())
-        .and_then(|settings| settings.get("startingAmount").and_then(|v| v.as_f64()))
-        .filter(|v| v.is_finite() && *v > 0.0)
-        .unwrap_or(0.0)
-}
-
 fn compute_summary_current_value(
     goal: &Goal,
     funding_rules: &[GoalFundingRule],
     valuations: &AccountValuationMap,
-    starting_amount: f64,
 ) -> f64 {
-    let live_value = || compute_goal_value_from_shares(funding_rules, valuations) + starting_amount;
     if matches!(
         goal.status_lifecycle.as_str(),
         GOAL_LIFECYCLE_ACHIEVED | GOAL_LIFECYCLE_ARCHIVED
     ) {
-        goal.summary_current_value.unwrap_or_else(live_value)
+        goal.summary_current_value
+            .unwrap_or_else(|| compute_goal_value_from_shares(funding_rules, valuations))
     } else {
-        live_value()
+        compute_goal_value_from_shares(funding_rules, valuations)
     }
 }
 
@@ -677,13 +667,7 @@ impl<T: GoalRepositoryTrait> GoalService<T> {
             return Ok(goal);
         }
         let rules = self.load_counted_funding_rules(&goal)?;
-        let plan = self.goal_repo.load_goal_plan(goal_id)?;
-        let current = compute_summary_current_value(
-            &goal,
-            &rules,
-            valuations,
-            save_up_starting_amount(plan.as_ref()),
-        );
+        let current = compute_summary_current_value(&goal, &rules, valuations);
         let mut update = GoalSummaryUpdate {
             summary_target_amount: goal.target_amount,
             summary_current_value: Some(current),
@@ -699,7 +683,7 @@ impl<T: GoalRepositoryTrait> GoalService<T> {
             if goal.goal_type == "retirement" {
                 update.summary_target_amount = None;
                 update.summary_progress = None;
-                if plan.is_some() {
+                if self.goal_repo.load_goal_plan(goal_id)?.is_some() {
                     let as_of = self.today();
                     let prepared = self.prepare_retirement_input(goal_id, valuations, as_of)?;
                     let overview = compute_retirement_overview_with_mode(
@@ -1071,15 +1055,6 @@ impl<T: GoalRepositoryTrait + Send + Sync> GoalServiceTrait for GoalService<T> {
             )
             .into());
         }
-        if plan.plan_kind == "save_up" {
-            let settings: serde_json::Value = serde_json::from_str(&plan.settings_json)?;
-            if let Some(value) = settings.get("startingAmount") {
-                validate_non_negative_amount(
-                    "Starting amount",
-                    value.as_f64().unwrap_or(f64::NAN),
-                )?;
-            }
-        }
         if plan.plan_kind == "retirement" {
             let mut settings_json: serde_json::Value = serde_json::from_str(&plan.settings_json)
                 .map_err(|e| {
@@ -1253,12 +1228,7 @@ impl<T: GoalRepositoryTrait + Send + Sync> GoalServiceTrait for GoalService<T> {
         let plan = self.goal_repo.load_goal_plan(goal_id)?;
         let funding_rules = self.goal_repo.load_funding_rules(goal_id)?;
 
-        let current_value = compute_summary_current_value(
-            &goal,
-            &funding_rules,
-            valuation_map,
-            save_up_starting_amount(plan.as_ref()),
-        );
+        let current_value = compute_summary_current_value(&goal, &funding_rules, valuation_map);
 
         // Parse settings from plan if it exists
         let (monthly_contribution, expected_return) = if let Some(p) = &plan {
@@ -2524,7 +2494,7 @@ mod tests {
         let mut vals = HashMap::new();
         vals.insert("acct-1".into(), 80_000.0);
 
-        let current_value = compute_summary_current_value(&goal, &rules, &vals, 5_000.0);
+        let current_value = compute_summary_current_value(&goal, &rules, &vals);
         assert!((current_value - 42_000.0).abs() < 0.01);
     }
 
@@ -2535,75 +2505,9 @@ mod tests {
         let mut vals = HashMap::new();
         vals.insert("acct-1".into(), 80_000.0);
 
-        let current_value = compute_summary_current_value(&goal, &rules, &vals, 0.0);
+        let current_value = compute_summary_current_value(&goal, &rules, &vals);
         assert!((current_value - 80_000.0).abs() < 0.01);
     }
-
-    fn save_up_plan(settings_json: &str) -> SaveGoalPlan {
-        SaveGoalPlan {
-            goal_id: "goal-1".into(),
-            plan_kind: "save_up".into(),
-            planner_mode: None,
-            settings_json: settings_json.into(),
-            summary_json: None,
-        }
-    }
-
-    #[tokio::test]
-    async fn save_up_starting_amount_adds_to_funded_value() {
-        let repo = Arc::new(MockGoalRepository::new(vec![test_goal("active", None)]));
-        repo.set_funding_rules("goal-1", vec![share_rule("goal-1", "acct-1", 50.0)]);
-        let service = GoalService::new(repo, Arc::new(MockAccountService::default()));
-        service
-            .save_goal_plan(save_up_plan(
-                r#"{"startingAmount":10000,"monthlyContribution":500}"#,
-            ))
-            .await
-            .unwrap();
-        let valuations = HashMap::from([("acct-1".to_string(), 80_000.0)]);
-
-        let refreshed = service
-            .refresh_summary_with_valuations("goal-1", &valuations)
-            .await
-            .unwrap();
-        assert_eq!(refreshed.summary_current_value, Some(50_000.0));
-        assert_eq!(refreshed.summary_progress, Some(0.5));
-
-        let overview = service
-            .compute_save_up_overview("goal-1", &valuations)
-            .await
-            .unwrap();
-        assert!((overview.current_value - 50_000.0).abs() < 0.01);
-    }
-
-    #[tokio::test]
-    async fn save_up_starting_amount_counts_without_funding_accounts() {
-        let repo = Arc::new(MockGoalRepository::new(vec![test_goal("active", None)]));
-        let service = GoalService::new(repo, Arc::new(MockAccountService::default()));
-        service
-            .save_goal_plan(save_up_plan(r#"{"startingAmount":25000}"#))
-            .await
-            .unwrap();
-
-        let refreshed = service
-            .refresh_summary_with_valuations("goal-1", &HashMap::new())
-            .await
-            .unwrap();
-        assert_eq!(refreshed.summary_current_value, Some(25_000.0));
-    }
-
-    #[tokio::test]
-    async fn save_goal_plan_rejects_negative_starting_amount() {
-        let repo = Arc::new(MockGoalRepository::new(vec![test_goal("active", None)]));
-        let service = GoalService::new(repo, Arc::new(MockAccountService::default()));
-
-        let err = service
-            .save_goal_plan(save_up_plan(r#"{"startingAmount":-1}"#))
-            .await
-            .expect_err("negative starting amount should be rejected");
-        assert!(err.to_string().contains("Starting amount"));
-    }
-
     #[tokio::test]
     async fn save_up_summary_recalculates_health_and_completion_from_current_inputs() {
         let mut goal = test_goal("active", Some(100_000.0));
