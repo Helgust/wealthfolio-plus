@@ -1,13 +1,13 @@
 // Plan starting point from Wealthfolio: net worth as on the Net Worth page, accounts with
 // positions and lots, real estate and debts (Wealthfolio 3.9+). The Spanish account type and the real
 // estate settings are applied separately (buildStart) so changing them does not reload the portfolio.
-import type { AddonContext, Holding } from '@wealthfolio/addon-sdk';
+import type { AddonContext, AlternativeAssetHolding, Holding } from '@wealthfolio/addon-sdk';
 import { positionValue, type Account, type Position } from '../engine/portfolio';
 import { annuityPayment, type Loan, type Property } from '../engine/real-estate';
 import type { StartingPoint } from '../engine/run-plan';
 import { defaultSetting, type AccountSetting, type AccountSettings } from '../model/accounts';
 import { defaultPropertySetting, type PropertySetting, type RealEstateSettings } from '../model/properties';
-import { getAlternativeHoldings, getNetWorth, type AlternativeAssetHolding } from './fork-api';
+import { getNetWorth } from './fork-api';
 
 export interface WfAccount {
   id: string;
@@ -91,6 +91,18 @@ async function loadAccount(
     positions.push(toPosition(h, full?.lots));
   }
   return { cash, positions };
+}
+
+/** Alternative holdings; null when the host rejects the call. */
+export async function getAlternativeHoldings(
+  ctx: AddonContext,
+): Promise<AlternativeAssetHolding[] | null> {
+  try {
+    return await ctx.api.alternativeAssets.getAll();
+  } catch (error) {
+    ctx.api.logger.warn(`alternativeAssets.getAll unavailable: ${String(error)}`);
+    return null;
+  }
 }
 
 export async function loadPortfolio(ctx: AddonContext): Promise<LoadedPortfolio> {

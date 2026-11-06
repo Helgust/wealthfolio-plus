@@ -4,7 +4,6 @@ import {
   Button,
   Input,
   Label,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -18,6 +17,7 @@ import {
   SheetTitle,
   Switch,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Account } from '../engine/portfolio';

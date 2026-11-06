@@ -108,6 +108,7 @@ describe('loadPortfolio', () => {
       {
         id: 'PROP-1',
         kind: 'PROPERTY',
+        symbol: 'Property',
         name: 'Home',
         currency: 'EUR',
         marketValue: '300000',
@@ -115,10 +116,11 @@ describe('loadPortfolio', () => {
         valuationDate: '2026-09-01',
         metadata: { sub_type: 'residence' },
       },
-      { id: 'PROP-2', kind: 'PROPERTY', name: 'Plot', currency: 'EUR', marketValue: '40000', valuationDate: '2026-09-01', metadata: { sub_type: 'land' } },
+      { id: 'PROP-2', kind: 'PROPERTY', symbol: 'Property', name: 'Plot', currency: 'EUR', marketValue: '40000', valuationDate: '2026-09-01', metadata: { sub_type: 'land' } },
       {
         id: 'LIAB-1',
         kind: 'LIABILITY',
+        symbol: 'Liability',
         name: 'Mortgage',
         currency: 'EUR',
         marketValue: '80000',

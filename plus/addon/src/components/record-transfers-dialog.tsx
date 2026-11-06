@@ -11,15 +11,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { useState } from 'react';
 import type { BudgetMonth } from '../engine/budget';
-import { saveTransferPair } from '../lib/fork-api';
 import { formatMoney } from '../lib/format';
 import type { WfAccount } from '../lib/starting-point';
 import type { Budget } from '../model/budget';
@@ -75,7 +74,7 @@ export function RecordTransfersDialog(props: Props) {
     const done = [...recorded];
     try {
       for (const l of todo) {
-        await saveTransferPair(props.ctx, {
+        await props.ctx.api.activities.saveTransferPair({
           fromAccountId: sourceId,
           toAccountId: l.to!.id,
           activityDate: new Date().toISOString(),

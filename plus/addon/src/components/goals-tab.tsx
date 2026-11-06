@@ -8,7 +8,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -20,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Pencil } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Account } from '../engine/portfolio';

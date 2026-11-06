@@ -3,7 +3,6 @@
 import {
   Button,
   Input,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -18,6 +17,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { monthsToRepay } from '../engine/real-estate';
@@ -664,7 +664,7 @@ function PrepaymentsSection({ draft, set }: SectionProps) {
             <RemoveButton onClick={() => setList(without(list, i))} />
           </div>
           <ToggleGroup
-            type="multiple"
+            multiple
             variant="outline"
             size="sm"
             value={p.months.map(String)}

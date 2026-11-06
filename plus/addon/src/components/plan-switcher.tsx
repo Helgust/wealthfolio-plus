@@ -14,12 +14,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Copy, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -55,20 +55,21 @@ export function PlanSwitcher({ items, activeId, max, noun, disabled, onSelect, o
         </SelectContent>
       </Select>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" aria-label={`${Noun} actions`} disabled={disabled}>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
+        <DropdownMenuTrigger
+          disabled={disabled}
+          render={<Button variant="outline" size="icon" aria-label={`${Noun} actions`} />}
+        >
+          <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem disabled={full} onSelect={onNew}>
+          <DropdownMenuItem disabled={full} onClick={onNew}>
             <Plus className="h-4 w-4" /> New {noun}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={full} onSelect={onDuplicate}>
+          <DropdownMenuItem disabled={full} onClick={onDuplicate}>
             <Copy className="h-4 w-4" /> Duplicate
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={items.length < 2} onSelect={() => setConfirming(true)}>
+          <DropdownMenuItem disabled={items.length < 2} onClick={() => setConfirming(true)}>
             <Trash2 className="h-4 w-4" /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>

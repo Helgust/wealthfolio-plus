@@ -8,7 +8,6 @@ import {
   Page,
   PageContent,
   PageHeader,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -22,6 +21,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from '@wealthfolio/ui';
+import { Select } from '../components/select';
 import { useMemo, useState } from 'react';
 import { CompareChart, SLOT_COUNT, SlotColorScope, SlotSwatch, type ComparedRun } from '../components/compare-chart';
 import { PageMessage } from '../components/page-message';
@@ -189,9 +189,8 @@ export function ComparePage({ ctx }: { ctx: AddonContext }) {
         text="Every plan starts from your current Wealthfolio data."
         actions={
           <ToggleGroup
-            type="single"
-            value={mode}
-            onValueChange={(v) => v && setMode(v as ValueMode)}
+            value={[mode]}
+            onValueChange={(v) => v[0] && setMode(v[0] as ValueMode)}
             variant="outline"
             size="sm"
           >

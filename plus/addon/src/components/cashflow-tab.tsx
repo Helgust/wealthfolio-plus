@@ -4,12 +4,12 @@ import {
   Button,
   Card,
   CardContent,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { ChartContainer, ChartStyle, Sankey, type ChartConfig } from '@wealthfolio/ui/chart';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';

@@ -3,13 +3,13 @@ import {
   Button,
   Input,
   Label,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Switch,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Property } from '../engine/real-estate';
 import { rulesForYear } from '../es-tax';

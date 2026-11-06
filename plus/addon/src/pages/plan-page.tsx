@@ -147,9 +147,8 @@ export function PlanPage({ ctx }: { ctx: AddonContext }) {
               onDelete={() => run((b) => deletePlan(ctx.api.storage, b, active.id))}
             />
             <ToggleGroup
-              type="single"
-              value={mode}
-              onValueChange={(v) => v && setMode(v as ValueMode)}
+              value={[mode]}
+              onValueChange={(v) => v[0] && setMode(v[0] as ValueMode)}
               variant="outline"
               size="sm"
             >

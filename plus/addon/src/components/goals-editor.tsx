@@ -3,12 +3,12 @@
 import {
   Button,
   Input,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Account } from '../engine/portfolio';
 import type { Loan } from '../engine/real-estate';

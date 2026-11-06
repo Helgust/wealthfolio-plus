@@ -37,7 +37,6 @@ import {
   withGoalTargets,
   type BudgetFact,
 } from '../lib/budget-fact';
-import { getSpendingReport } from '../lib/fork-api';
 import { formatMoney } from '../lib/format';
 import { isLiability, loadPortfolio, type LoadedPortfolio } from '../lib/starting-point';
 import { newBudget, type Budget } from '../model/budget';
@@ -130,7 +129,7 @@ export function BudgetPage({ ctx }: { ctx: AddonContext }) {
   const spendingDraft: SpendingDraft = async (months) => {
     const { startDate, endDate } = lastMonths(today, months);
     const [report, categories] = await Promise.all([
-      getSpendingReport(ctx, startDate, endDate),
+      ctx.api.spending.getReport({ startDate, endDate }),
       ctx.api.spending.getCategories(),
     ]);
     const names = new Map(categories.map((c) => [c.categoryId, c.name]));

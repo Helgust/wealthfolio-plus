@@ -2,12 +2,12 @@
 // and withdrawal order.
 import {
   Button,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import type { Account } from '../engine/portfolio';
 import type { Loan } from '../engine/real-estate';

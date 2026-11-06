@@ -4,7 +4,7 @@ import type { AddonContext } from '@wealthfolio/addon-sdk';
 import { useAddonTranslation } from '@wealthfolio/addon-sdk';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@wealthfolio/ui';
 import { useState } from 'react';
-import { getAlternativeHoldings } from '../lib/fork-api';
+import { getAlternativeHoldings } from '../lib/starting-point';
 import { runBench, type BenchResult } from '../lib/phase0-bench';
 
 const BLOB_KEY = 'phase0.blob';

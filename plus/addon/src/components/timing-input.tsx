@@ -1,5 +1,6 @@
 // Input and label for a timing: a year, a person's age or a milestone.
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { Select } from './select';
 import type { Milestone, Plan, Timing } from '../model/plan';
 import { NumberInput } from './form-fields';
 

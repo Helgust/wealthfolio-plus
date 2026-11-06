@@ -1,7 +1,6 @@
 // Real estate and loans from Wealthfolio (Accounts tab): what the planner needs beyond the value —
 // use, owner, valor catastral, IBI, purchase costs; the payment or term and the rate type of each loan.
 import {
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -14,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '@wealthfolio/ui';
-import type { AlternativeAssetHolding } from '../lib/fork-api';
+import { Select } from './select';
+import type { AlternativeAssetHolding } from '@wealthfolio/addon-sdk';
 import { formatMoney, formatPercent } from '../lib/format';
 import {
   isLiability,

@@ -2,12 +2,12 @@
 import {
   Button,
   Input,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { Plus, Trash2 } from 'lucide-react';
 import { WITH_INFLATION, type Income, type IncomeTax, type OneTime, type Plan } from '../model/plan';
 import { AmountInput, GrowthInput } from './amount-input';

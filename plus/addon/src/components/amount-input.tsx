@@ -1,5 +1,6 @@
 // Inputs and labels for event amounts: the value per period and its change over time.
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { Select } from './select';
 import { formatMoney, formatPercent } from '../lib/format';
 import type { Growth, Period } from '../model/plan';
 import { NumberInput, PercentInput } from './form-fields';

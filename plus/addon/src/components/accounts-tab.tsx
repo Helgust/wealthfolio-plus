@@ -1,7 +1,6 @@
 // "Accounts" tab: Wealthfolio accounts → Spanish types and owners, summary by type.
 // The model value (balance + positions by lots) is checked against the Wealthfolio valuation.
 import {
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
@@ -13,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import { positionValue } from '../engine/portfolio';
 import { formatMoney } from '../lib/format';
 import { settingFor, type LoadedPortfolio, type WfAccount } from '../lib/starting-point';

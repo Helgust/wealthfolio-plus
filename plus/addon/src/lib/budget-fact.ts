@@ -1,8 +1,9 @@
 // Budget against Wealthfolio: balances at the end of past months, budget lines from the spending
 // report, fill targets from goals.
-import type { AddonContext } from '@wealthfolio/addon-sdk';
+import type { AddonContext, SpendingCategoryBreakdownRow } from '@wealthfolio/addon-sdk';
 import { addMonths, type Budget, type BudgetLine } from '../model/budget';
-import type { SpendingReport } from './fork-api';
+
+type ReportRow = Pick<SpendingCategoryBreakdownRow, 'categoryId' | 'amount'>;
 
 /** Last day of a month: "2026-11" → "2026-11-30". */
 export function monthEnd(m: string): string {
@@ -45,12 +46,12 @@ export function lastMonths(today: string, n: number): { startDate: string; endDa
  * a draft of budget lines. names — category id → name.
  */
 export function spendingLines(
-  report: SpendingReport,
+  report: { spendingBreakdown: ReportRow[]; incomeBreakdown: ReportRow[] },
   names: Map<string, string>,
   months: number,
   max: { incomes: number; expenses: number },
 ): { incomes: BudgetLine[]; expenses: BudgetLine[] } {
-  const lines = (rows: SpendingReport['spendingBreakdown'], fallback: string, n: number) =>
+  const lines = (rows: ReportRow[], fallback: string, n: number) =>
     rows
       .map((r) => ({
         name: (names.get(r.categoryId) ?? fallback).slice(0, 60),

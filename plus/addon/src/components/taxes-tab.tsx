@@ -5,12 +5,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@wealthfolio/ui';
+import { Select } from './select';
 import {
   Bar,
   BarChart,

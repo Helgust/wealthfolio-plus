@@ -1,5 +1,6 @@
 // Form fields of the plan editor.
-import { Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { Input, Label, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
+import { Select } from './select';
 import type { ReactNode } from 'react';
 import { MONTH_NAMES } from '../lib/format';
 
