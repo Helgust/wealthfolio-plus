@@ -26,6 +26,12 @@ import {
   unlinkTransferActivities,
 } from "@/adapters";
 import {
+  getAllocationTargetDrift,
+  getTaxonomy,
+  listAllocationTargets,
+  listAllocationTargetWeights,
+} from "@/adapters";
+import {
   addExchangeRate,
   getExchangeRates,
   getExchangeRatesForDates,
@@ -476,6 +482,11 @@ export function createAddonHostAPI(
       getActivities,
       getAccounts,
       getAlternativeHoldings,
+
+      listAllocationTargets,
+      listAllocationTargetWeights,
+      getAllocationTargetDrift,
+      getTaxonomy,
 
       getExchangeRates,
       updateExchangeRate,

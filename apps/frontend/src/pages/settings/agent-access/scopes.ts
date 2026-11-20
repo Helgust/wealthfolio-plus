@@ -21,6 +21,8 @@ export type ScopeKey =
   | "classification:suggest"
   | "classification:write"
   | "market-data:write"
+  | "accounts:write"
+  | "holdings:write"
   | "financial-planning:draft";
 
 export type ScopeGroup = "read" | "write";
@@ -49,6 +51,8 @@ export const SCOPES: ScopeMeta[] = [
   { key: "market-data:write", i18n: "market_data_write", group: "write" },
   { key: "spending:write", i18n: "spending_write", group: "write" },
   { key: "budget:write", i18n: "budget_write", group: "write" },
+  { key: "accounts:write", i18n: "accounts_write", group: "write" },
+  { key: "holdings:write", i18n: "holdings_write", group: "write" },
   // wealthfolio-plus: budget drafts for the planner addon; in no preset.
   { key: "financial-planning:draft", i18n: "financial_planning_draft", group: "write" },
 ];
@@ -132,8 +136,11 @@ export function applyScopeDependencies(scopes: Iterable<string>): ScopeKey[] {
   if (set.has("classification:write")) {
     set.add("classification:suggest");
   }
-  if (set.has("market-data:write")) {
+  if (set.has("market-data:write") || set.has("holdings:write")) {
     set.add("holdings:read");
+  }
+  if (set.has("accounts:write")) {
+    set.add("accounts:read");
   }
   if (set.has("spending:write") || set.has("budget:write")) {
     set.add("spending:read");
