@@ -55,8 +55,10 @@ export const settingFor = (settings: AccountSettings, a: WfAccount): AccountSett
  */
 function toPosition(h: Holding, lots: Holding['lots']): Position {
   const units = h.quantity;
-  const costBase = h.costBasis?.base ?? h.marketValue.base;
-  const price = units > 0 ? h.marketValue.base / units : 0;
+  // shortcut: a holding the host can't value (null since SDK 3.13) counts as 0; flag it in the UI if it shows up.
+  const value = h.marketValue.base ?? 0;
+  const costBase = h.costBasis?.base ?? value;
+  const price = units > 0 ? value / units : 0;
   const name = h.instrument?.symbol ?? h.id;
   const localCost = (lots ?? []).reduce((s, l) => s + l.costBasis, 0);
   if (!lots?.length || localCost <= 0) {
@@ -82,7 +84,7 @@ async function loadAccount(
   const positions: Position[] = [];
   for (const h of holdings) {
     if (h.holdingType === 'cash') {
-      cash += h.marketValue.base;
+      cash += h.marketValue.base ?? 0;
       continue;
     }
     if (h.quantity <= 0) continue;
