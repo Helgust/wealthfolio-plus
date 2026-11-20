@@ -88,6 +88,8 @@
     "*.dylib",
     "*.dll",
     "**/*.toml",
-    "packages/addon-sdk/docs/api/"
+    "packages/addon-sdk/docs/api/",
+    "plus/",
+    "CLAUDE.md"
   ]
 }
