@@ -60,12 +60,13 @@ sudo usermod -aG docker $USER      # затем выйти из SSH и зайт�
 
 1. Отправить ветку `plus` на GitHub: `git push`. VPS собирает то, что лежит на GitHub.
 2. Собрать ZIP аддона (не при запущенном `pnpm dev:server` — оба пишут в `dist`):
-   ```powershell
-   cd plus/addon; pnpm build; cd ../..
-   python plus/scripts/package-addon.py
+   ```bash
+   cd plus/addon && pnpm install && pnpm build && cd ../..
+   python3 plus/scripts/package-addon.py
    ```
-   Скрипт печатает путь к `plus/addon/dist/planificador-es-<версия>.zip`. Штатный `pnpm bundle` на
-   Windows не работает: ему нужны `zip` и `find`.
+   Скрипт печатает путь к `plus/addon/dist/planificador-es-<версия>.zip`. На Windows — те же команды
+   в PowerShell (`;` вместо `&&`, `python` вместо `python3`); штатный `pnpm bundle` там не работает:
+   ему нужны `zip` и `find`.
 
 ## 2. Образ форка
 
@@ -301,7 +302,7 @@ networks:
    - в боковом меню есть Planificador ES и Compare plans;
    - на странице плана у «Net worth today» подпись **from Wealthfolio**. Подпись «sum of accounts»
      означает, что API форка не отвечает — то есть запущен не тот образ;
-   - Settings → About — версия 3.11.0.
+   - Settings → About — версия 3.13.1.
 
 ## Как жить с двумя экземплярами
 
@@ -320,7 +321,10 @@ docker tag wealthfolio-plus:latest wealthfolio-plus:$(git rev-parse --short HEAD
 cd ~/wealthfolio-dev && docker compose up -d
 ```
 
-Откат: в `compose.yml` указать `image: wealthfolio-plus:<прошлый коммит>` и снова `up -d`.
+Откат: в `compose.yml` указать `image: wealthfolio-plus:<прошлый коммит>` и снова `up -d`. Если новый
+образ принёс миграции базы (например, переход на новый релиз Wealthfolio), старый образ эту базу не
+откроет: перед обновлением сделайте бэкап в форке (Settings → Backup & Export) и откатывайтесь вместе
+с ним.
 
 Новая версия аддона — Install from File с новым ZIP поверх старого: файлы заменятся, планы останутся.
 **Не удаляйте аддон (Uninstall) ради переустановки**: вместе с ним удаляется его хранилище, то есть
@@ -344,5 +348,5 @@ cd ~/wealthfolio-dev && docker compose down -v    # -v удаляет и том 
 5. Обновления Wealthfolio с этого момента — только мержем тега в форк и пересборкой. `docker pull`
    для этого контейнера больше не делать; Watchtower и другое автообновление с него снять.
 
-Откат на официальный образ той же версии (3.11.0) — просто смена образа: своих миграций базы в форке
-нет.
+Откат на официальный образ той же версии (3.13.1) — просто смена образа: своих миграций базы в форке
+нет. На более старый образ откатиться нельзя: миграции новой версии необратимы.
